@@ -1,27 +1,35 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Sparkles } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Animated
+} from 'react-native';
+import { MessageSquare, X, Send, Sparkles } from 'lucide-react-native';
 import { chatWithLibrarian } from '../services/geminiService';
 import { ChatMessage } from '../types';
 
 const AILibrarian: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', role: 'model', text: 'Greetings. I am Shoseki, your library assistant. How may I assist your literary journey today?', timestamp: new Date() }
+    {
+      id: '1',
+      role: 'model',
+      text: 'Greetings. I am Shoseki, your library assistant. How may I assist your literary journey today?',
+      timestamp: new Date()
+    }
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const flatListRef = useRef<FlatList>(null);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isOpen]);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSend = async () => {
     if (!inputText.trim()) return;
 
     const userMsg: ChatMessage = {
@@ -36,99 +44,226 @@ const AILibrarian: React.FC = () => {
     setIsLoading(true);
 
     try {
-        // Format history for Gemini
-        const history = messages.map(m => ({
-            role: m.role === 'model' ? 'model' : 'user',
-            parts: [{ text: m.text }]
-        }));
+      const history = messages.map(m => ({
+        role: m.role === 'model' ? 'model' : 'user',
+        parts: [{ text: m.text }]
+      }));
 
-        const responseText = await chatWithLibrarian(history, userMsg.text);
-        
-        const botMsg: ChatMessage = {
-            id: (Date.now() + 1).toString(),
-            role: 'model',
-            text: responseText || "I'm having trouble reading the archives right now.",
-            timestamp: new Date()
-        };
-        setMessages(prev => [...prev, botMsg]);
+      const responseText = await chatWithLibrarian(history, userMsg.text);
+
+      const botMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: responseText || "I'm having trouble reading the archives right now.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMsg]);
     } catch (error) {
-        console.error(error);
+      console.error(error);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
+  const renderMessage = ({ item }: { item: ChatMessage }) => (
+    <View style={[
+      styles.messageContainer,
+      item.role === 'user' ? styles.userMessage : styles.botMessage
+    ]}>
+      <Text style={[
+        styles.messageText,
+        item.role === 'user' ? styles.userMessageText : styles.botMessageText
+      ]}>
+        {item.text}
+      </Text>
+    </View>
+  );
+
+  if (!isOpen) {
+    return (
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setIsOpen(true)}
+        activeOpacity={0.8}
+      >
+        <Sparkles size={24} color="#fff" />
+      </TouchableOpacity>
+    );
+  }
+
   return (
-    <>
-      {/* Container aligned to bottom of relative parent (PhoneFrame) */}
-      <div className="absolute bottom-0 left-0 w-full h-0 z-40 pointer-events-none">
-          
-          {/* Floating Action Button - Positioned above tab bar */}
-          <button 
-            onClick={() => setIsOpen(true)}
-            className={`absolute bottom-28 right-4 pointer-events-auto p-4 bg-shoseki-brown text-white rounded-full shadow-lg hover:bg-shoseki-darkBrown transition-all duration-300 z-30 dark:bg-amber-800 dark:hover:bg-amber-900 ${isOpen ? 'scale-0' : 'scale-100'}`}
-          >
-            <Sparkles className="w-6 h-6" />
-          </button>
+    <KeyboardAvoidingView
+      style={styles.chatContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTitle}>
+          <Sparkles size={18} color="#fef08a" />
+          <Text style={styles.headerText}>Librarian</Text>
+        </View>
+        <TouchableOpacity onPress={() => setIsOpen(false)}>
+          <X size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
-          {/* Chat Window */}
-          <div className={`absolute bottom-28 right-4 left-4 h-[500px] pointer-events-auto bg-white dark:bg-stone-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 z-40 border border-shoseki-sand dark:border-stone-700 transform origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
-            
-            {/* Header */}
-            <div className="bg-shoseki-brown dark:bg-stone-950 p-4 flex justify-between items-center text-white border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-yellow-200" />
-                <span className="font-serif font-bold">Librarian</span>
-              </div>
-              <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition-colors">
-                <X size={18} />
-              </button>
-            </div>
+      {/* Messages */}
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={item => item.id}
+        style={styles.messagesList}
+        contentContainerStyle={styles.messagesContent}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+        ListFooterComponent={
+          isLoading ? (
+            <View style={[styles.messageContainer, styles.botMessage]}>
+              <Text style={styles.loadingText}>Consulting the archives...</Text>
+            </View>
+          ) : null
+        }
+      />
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-shoseki-cream/50 dark:bg-stone-900 no-scrollbar">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-shoseki-brown text-white rounded-br-none dark:bg-amber-800' 
-                      : 'bg-stone-200 text-stone-800 rounded-bl-none dark:bg-stone-800 dark:text-stone-200'
-                  }`}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              {isLoading && (
-                 <div className="flex justify-start">
-                   <div className="bg-stone-100 dark:bg-stone-800 p-3 rounded-2xl rounded-bl-none text-stone-500 dark:text-stone-400 text-xs italic">
-                     Consulting the archives...
-                   </div>
-                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Input */}
-            <form onSubmit={handleSend} className="p-3 border-t border-stone-100 dark:border-stone-700 bg-white dark:bg-stone-900 flex gap-2">
-              <input 
-                type="text" 
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask for a recommendation..."
-                className="flex-1 px-4 py-2 bg-stone-50 border border-stone-200 rounded-full focus:outline-none focus:ring-2 focus:ring-shoseki-brown/50 text-sm dark:bg-stone-800 dark:border-stone-700 dark:text-white"
-              />
-              <button 
-                type="submit" 
-                disabled={isLoading || !inputText.trim()}
-                className="p-2 bg-shoseki-brown text-white rounded-full hover:bg-shoseki-darkBrown disabled:opacity-50 transition-colors dark:bg-amber-800 dark:hover:bg-amber-700"
-              >
-                <Send size={18} />
-              </button>
-            </form>
-          </div>
-      </div>
-    </>
+      {/* Input */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder="Ask for a recommendation..."
+          placeholderTextColor="#a8a29e"
+          onSubmitEditing={handleSend}
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+          onPress={handleSend}
+          disabled={isLoading || !inputText.trim()}
+        >
+          <Send size={18} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
+
+const styles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    bottom: 100,
+    right: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#5D4037',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  chatContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    right: 16,
+    height: 450,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  header: {
+    backgroundColor: '#5D4037',
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  messagesList: {
+    flex: 1,
+    backgroundColor: '#fefce8',
+  },
+  messagesContent: {
+    padding: 16,
+  },
+  messageContainer: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#5D4037',
+    borderBottomRightRadius: 4,
+  },
+  botMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e7e5e4',
+    borderBottomLeftRadius: 4,
+  },
+  messageText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  userMessageText: {
+    color: '#fff',
+  },
+  botMessageText: {
+    color: '#1c1917',
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#78716c',
+    fontStyle: 'italic',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f5f5f4',
+    backgroundColor: '#fff',
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#fafaf9',
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1c1917',
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#5D4037',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+});
 
 export default AILibrarian;

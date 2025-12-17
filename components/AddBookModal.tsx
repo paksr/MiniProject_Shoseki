@@ -1,6 +1,17 @@
-
 import React, { useState, useEffect } from 'react';
-import { X, Search, Sparkles, BookOpen, Save } from 'lucide-react';
+import {
+  View,
+  Text,
+  TextInput,
+  Modal,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Alert
+} from 'react-native';
+import { X, Search, Sparkles, BookOpen, Save } from 'lucide-react-native';
 import Button from './Button';
 import { generateBookDetails } from '../services/geminiService';
 import { Book, BookStatus } from '../types';
@@ -49,18 +60,21 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
       setFormData(prev => ({
         ...prev,
         ...details,
-        // Keep a random image if none provided, or map if we had an image API
         coverUrl: `https://picsum.photos/seed/${encodeURIComponent(details.title)}/200/300`
       }));
     } catch (error) {
-      alert("Failed to fetch book details. Please enter manually.");
+      Alert.alert("Error", "Failed to fetch book details. Please enter manually.");
     } finally {
       setIsSearching(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
+    if (!formData.title || !formData.author || !formData.genre) {
+      Alert.alert("Error", "Please fill in all required fields.");
+      return;
+    }
+
     if (initialBook && onEdit) {
       onEdit({
         ...initialBook,
@@ -75,93 +89,299 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
     onClose();
   };
 
-  // Requested styling: light grey background, white font, black border
-  const inputClassName = "w-full px-4 py-2 border border-black rounded-lg focus:ring-2 focus:ring-shoseki-brown focus:outline-none bg-stone-400 text-white placeholder:text-stone-200";
-
   return (
-    <div className="absolute inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-stone-900 rounded-3xl shadow-2xl w-full max-w-[400px] overflow-hidden flex flex-col max-h-[80vh] border border-stone-200 dark:border-stone-800">
-        <div className="bg-shoseki-brown dark:bg-stone-950 p-4 flex justify-between items-center text-white border-b border-white/10">
-          <h2 className="font-serif font-bold text-xl flex items-center gap-2">
-            <BookOpen size={20} /> {initialBook ? 'Edit Book' : 'Add New Book'}
-          </h2>
-          <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition-colors">
-            <X size={20} />
-          </button>
-        </div>
+    <Modal
+      visible={true}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerTitle}>
+              <BookOpen size={20} color="#fff" />
+              <Text style={styles.headerText}>
+                {initialBook ? 'Edit Book' : 'Add New Book'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <X size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
 
-        <div className="p-6 overflow-y-auto no-scrollbar">
-          {/* AI Auto-fill Section - Only for Adding */}
-          {!initialBook && (
-            <div className="mb-6 bg-shoseki-cream dark:bg-stone-800 p-4 rounded-xl border border-shoseki-sand dark:border-stone-700">
-              <label className="block text-xs font-bold text-shoseki-accent dark:text-amber-500 uppercase tracking-wider mb-2">
-                AI Auto-fill
-              </label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Enter title or ISBN..."
-                  className="flex-1 px-4 py-2 border border-shoseki-sand dark:border-stone-600 rounded-lg focus:ring-2 focus:ring-shoseki-brown focus:outline-none dark:bg-stone-700 dark:text-white"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAISearch()}
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {/* AI Auto-fill */}
+            {!initialBook && (
+              <View style={styles.aiSection}>
+                <Text style={styles.aiLabel}>AI Auto-fill</Text>
+                <View style={styles.aiRow}>
+                  <TextInput
+                    style={styles.aiInput}
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Enter title or ISBN..."
+                    placeholderTextColor="#a8a29e"
+                    onSubmitEditing={handleAISearch}
+                  />
+                  <TouchableOpacity
+                    style={styles.aiButton}
+                    onPress={handleAISearch}
+                    disabled={isSearching}
+                  >
+                    {isSearching ? (
+                      <Sparkles size={18} color="#5D4037" />
+                    ) : (
+                      <Search size={18} color="#5D4037" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Form Fields */}
+            <View style={styles.form}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Title *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.title}
+                  onChangeText={(text) => setFormData({ ...formData, title: text })}
+                  placeholder="Book title"
+                  placeholderTextColor="#a8a29e"
                 />
-                <Button onClick={handleAISearch} disabled={isSearching} variant="secondary">
-                  {isSearching ? <Sparkles className="animate-pulse" /> : <Search size={18} />}
-                </Button>
-              </div>
-            </div>
-          )}
+              </View>
 
-          <form id="addBookForm" onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Title</label>
-                <input required type="text" className={inputClassName} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Author</label>
-                    <input required type="text" className={inputClassName} value={formData.author} onChange={e => setFormData({...formData, author: e.target.value})} />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">ISBN</label>
-                    <input type="text" placeholder="Optional" className={inputClassName} value={formData.isbn} onChange={e => setFormData({...formData, isbn: e.target.value})} />
-                </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Genre</label>
-                    <input required type="text" className={inputClassName} value={formData.genre} onChange={e => setFormData({...formData, genre: e.target.value})} />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Pages</label>
-                    <input required type="number" className={inputClassName} value={formData.pages} onChange={e => setFormData({...formData, pages: parseInt(e.target.value) || 0})} />
-                </div>
-            </div>
-            <div>
-                 <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Shelf Location</label>
-                 <input type="text" placeholder="e.g. A-12" className={inputClassName} value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Cover URL</label>
-                <input type="text" className={inputClassName} value={formData.coverUrl} onChange={e => setFormData({...formData, coverUrl: e.target.value})} />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Description</label>
-                <textarea rows={3} className={inputClassName} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-            </div>
-          </form>
-        </div>
+              <View style={styles.row}>
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>Author *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.author}
+                    onChangeText={(text) => setFormData({ ...formData, author: text })}
+                    placeholder="Author name"
+                    placeholderTextColor="#a8a29e"
+                  />
+                </View>
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>ISBN</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.isbn}
+                    onChangeText={(text) => setFormData({ ...formData, isbn: text })}
+                    placeholder="Optional"
+                    placeholderTextColor="#a8a29e"
+                  />
+                </View>
+              </View>
 
-        <div className="p-4 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose} type="button">Cancel</Button>
-          <Button variant="primary" type="submit" form="addBookForm">
-             {initialBook ? <><Save size={16}/> Save Changes</> : 'Add Book'}
-          </Button>
-        </div>
-      </div>
-    </div>
+              <View style={styles.row}>
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>Genre *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.genre}
+                    onChangeText={(text) => setFormData({ ...formData, genre: text })}
+                    placeholder="Genre"
+                    placeholderTextColor="#a8a29e"
+                  />
+                </View>
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>Pages</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.pages.toString()}
+                    onChangeText={(text) => setFormData({ ...formData, pages: parseInt(text) || 0 })}
+                    placeholder="0"
+                    placeholderTextColor="#a8a29e"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Shelf Location</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.location}
+                  onChangeText={(text) => setFormData({ ...formData, location: text })}
+                  placeholder="e.g. A-12"
+                  placeholderTextColor="#a8a29e"
+                />
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Cover URL</Text>
+                <TextInput
+                  style={styles.input}
+                  value={formData.coverUrl}
+                  onChangeText={(text) => setFormData({ ...formData, coverUrl: text })}
+                  placeholder="https://..."
+                  placeholderTextColor="#a8a29e"
+                />
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={formData.description}
+                  onChangeText={(text) => setFormData({ ...formData, description: text })}
+                  placeholder="Book description..."
+                  placeholderTextColor="#a8a29e"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Button variant="ghost" onPress={onClose}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Button>
+            <Button onPress={handleSubmit} style={{ flex: 1 }}>
+              {initialBook ? (
+                <>
+                  <Save size={16} color="#fff" />
+                  <Text style={styles.submitText}>Save Changes</Text>
+                </>
+              ) : (
+                <Text style={styles.submitText}>Add Book</Text>
+              )}
+            </Button>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  header: {
+    backgroundColor: '#5D4037',
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  content: {
+    padding: 20,
+    maxHeight: 500,
+  },
+  aiSection: {
+    backgroundColor: '#fef3c7',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  aiLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#d97706',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  aiRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  aiInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#1c1917',
+  },
+  aiButton: {
+    backgroundColor: '#D7CCC8',
+    padding: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  form: {
+    gap: 16,
+  },
+  field: {
+    gap: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#57534e',
+  },
+  input: {
+    backgroundColor: '#a8a29e',
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#fff',
+  },
+  textArea: {
+    height: 80,
+    paddingTop: 10,
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f5f5f4',
+    backgroundColor: '#fafaf9',
+  },
+  cancelText: {
+    color: '#5D4037',
+    fontWeight: '600',
+  },
+  submitText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+});
 
 export default AddBookModal;

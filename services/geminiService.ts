@@ -1,8 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import Constants from 'expo-constants';
 
-// Initialize Gemini
-// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize Gemini with API key from Expo constants
+const apiKey = Constants.expoConfig?.extra?.geminiApiKey || process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+const ai = new GoogleGenAI({ apiKey });
 
 /**
  * Generates book details from a simple title query using Gemini.
@@ -65,29 +66,29 @@ export const chatWithLibrarian = async (history: { role: string; parts: { text: 
  * Suggest a reading list based on a mood.
  */
 export const suggestBooksByMood = async (mood: string) => {
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Suggest 3 books for a reader who is feeling "${mood}".`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            title: { type: Type.STRING },
-                            author: { type: Type.STRING },
-                            reason: { type: Type.STRING }
-                        }
-                    }
-                }
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Suggest 3 books for a reader who is feeling "${mood}".`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              author: { type: Type.STRING },
+              reason: { type: Type.STRING }
             }
-        });
-        const text = response.text;
-        return text ? JSON.parse(text) : [];
-    } catch (e) {
-        console.error(e);
-        return [];
-    }
-}
+          }
+        }
+      }
+    });
+    const text = response.text;
+    return text ? JSON.parse(text) : [];
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+};

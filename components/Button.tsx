@@ -1,37 +1,139 @@
 import React from 'react';
+import {
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  StyleSheet,
+  ViewStyle,
+  TextStyle
+} from 'react-native';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps {
+  children: React.ReactNode;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   isLoading?: boolean;
+  disabled?: boolean;
+  onPress?: () => void;
+  style?: ViewStyle;
 }
 
-const Button: React.FC<ButtonProps> = ({ 
-  children, 
-  variant = 'primary', 
-  isLoading, 
-  className = '', 
-  ...props 
+const Button: React.FC<ButtonProps> = ({
+  children,
+  variant = 'primary',
+  isLoading,
+  disabled,
+  onPress,
+  style,
 }) => {
-  const baseStyles = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-stone-900";
-  
-  const variants = {
-    primary: "bg-shoseki-brown text-white hover:bg-shoseki-darkBrown focus:ring-shoseki-brown shadow-md hover:shadow-lg dark:bg-amber-800 dark:hover:bg-amber-900",
-    secondary: "bg-shoseki-sand text-shoseki-darkBrown hover:bg-stone-300 focus:ring-shoseki-sand dark:bg-stone-700 dark:text-stone-200 dark:hover:bg-stone-600",
-    outline: "border-2 border-shoseki-brown text-shoseki-brown hover:bg-shoseki-brown hover:text-white dark:border-amber-700 dark:text-amber-500 dark:hover:bg-amber-900",
-    ghost: "text-shoseki-brown hover:bg-shoseki-sand/30 dark:text-stone-400 dark:hover:text-stone-200 dark:hover:bg-stone-800"
+  const getVariantStyles = (): { container: ViewStyle; text: TextStyle } => {
+    switch (variant) {
+      case 'primary':
+        return {
+          container: styles.primary,
+          text: styles.primaryText,
+        };
+      case 'secondary':
+        return {
+          container: styles.secondary,
+          text: styles.secondaryText,
+        };
+      case 'outline':
+        return {
+          container: styles.outline,
+          text: styles.outlineText,
+        };
+      case 'ghost':
+        return {
+          container: styles.ghost,
+          text: styles.ghostText,
+        };
+      default:
+        return {
+          container: styles.primary,
+          text: styles.primaryText,
+        };
+    }
   };
 
+  const variantStyles = getVariantStyles();
+
   return (
-    <button 
-      className={`${baseStyles} ${variants[variant]} ${isLoading ? 'opacity-70 cursor-not-allowed' : ''} ${className}`}
-      disabled={isLoading || props.disabled}
-      {...props}
+    <TouchableOpacity
+      style={[
+        styles.base,
+        variantStyles.container,
+        (isLoading || disabled) && styles.disabled,
+        style
+      ]}
+      disabled={isLoading || disabled}
+      onPress={onPress}
+      activeOpacity={0.7}
     >
       {isLoading ? (
-        <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-      ) : children}
-    </button>
+        <ActivityIndicator color={variant === 'primary' ? '#fff' : '#5D4037'} size="small" />
+      ) : (
+        typeof children === 'string' ? (
+          <Text style={[styles.text, variantStyles.text]}>{children}</Text>
+        ) : (
+          children
+        )
+      )}
+    </TouchableOpacity>
   );
 };
+
+const styles = StyleSheet.create({
+  base: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  text: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  // Primary
+  primary: {
+    backgroundColor: '#5D4037',
+    shadowColor: '#5D4037',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryText: {
+    color: '#fff',
+  },
+  // Secondary
+  secondary: {
+    backgroundColor: '#D7CCC8',
+  },
+  secondaryText: {
+    color: '#3E2723',
+  },
+  // Outline
+  outline: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#5D4037',
+  },
+  outlineText: {
+    color: '#5D4037',
+  },
+  // Ghost
+  ghost: {
+    backgroundColor: 'transparent',
+  },
+  ghostText: {
+    color: '#5D4037',
+  },
+});
 
 export default Button;

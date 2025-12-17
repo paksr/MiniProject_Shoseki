@@ -1,25 +1,32 @@
 {
   "name": "shoseki-library",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "main": "index.tsx",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
   },
   "dependencies": {
-    "react-dom": "^19.2.0",
-    "lucide-react": "^0.554.0",
     "@google/genai": "^1.30.0",
-    "react": "^19.2.0",
-    "react-router-dom": "^7.9.6",
-    "recharts": "^3.5.0"
+    "@react-native-async-storage/async-storage": "1.21.0",
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/native-stack": "^6.9.17",
+    "expo": "^51.0.0",
+    "expo-constants": "~15.4.5",
+    "expo-status-bar": "~1.11.1",
+    "lucide-react-native": "^0.344.0",
+    "react": "18.2.0",
+    "react-native": "0.73.6",
+    "react-native-safe-area-context": "4.8.2",
+    "react-native-screens": "~3.29.0",
+    "react-native-svg": "14.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.2.45",
+    "typescript": "~5.3.0"
   }
 }

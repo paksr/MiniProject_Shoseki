@@ -1,0 +1,24 @@
+{
+    "expo": {
+        "name": "Shoseki Library",
+        "slug": "shoseki-library",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "userInterfaceStyle": "automatic",
+        "splash": {
+            "backgroundColor": "#5D4037"
+        },
+        "assetBundlePatterns": [
+            "**/*"
+        ],
+        "ios": {
+            "supportsTablet": true
+        },
+        "android": {
+            "adaptiveIcon": {
+                "backgroundColor": "#5D4037"
+            }
+        },
+        "sdkVersion": "51.0.0"
+    }
+}
