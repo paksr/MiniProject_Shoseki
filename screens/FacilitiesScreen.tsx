@@ -51,6 +51,12 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
         return dateTime < new Date();
     };
 
+    // Helper to determine if a given date string (YYYY-MM-DD) is a Sunday
+    const isSunday = (dateStr: string) => {
+        const day = new Date(dateStr).getDay(); // 0 = Sunday
+        return day === 0;
+    };
+
     const handleFacilityPress = (facility: typeof FACILITIES[0]) => {
         setSelectedFacility(facility);
         setPax('1');
@@ -63,6 +69,10 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     const handleBooking = async () => {
         if (!selectedFacility || !selectedDate || !selectedStartTime || !selectedEndTime) {
             Alert.alert('Error', 'Please fill in all fields');
+            return;
+        }
+        if (isSunday(selectedDate)) {
+            Alert.alert('Error', 'Cannot book on Sundays');
             return;
         }
 
@@ -215,11 +225,15 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                             {/* Date Selection */}
                             <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Date</Text>
-                                <View style={styles.dateRow}>
-                                    {[0, 1, 2, 3, 4].map(offset => {
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
+                                    {Array.from({ length: 14 }, (_, i) => i).map(offset => {
                                         const date = new Date();
                                         date.setDate(date.getDate() + offset);
                                         const dateStr = date.toISOString().split('T')[0];
+                                        // Skip rendering if the date is a Sunday
+                                        if (isSunday(dateStr)) {
+                                            return null;
+                                        }
                                         const isSelected = selectedDate === dateStr;
                                         return (
                                             <TouchableOpacity
@@ -236,7 +250,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                             </TouchableOpacity>
                                         );
                                     })}
-                                </View>
+                                </ScrollView>
                             </View>
 
                             {/* Time Selection */}
@@ -353,8 +367,8 @@ const styles = StyleSheet.create({
     modalFooter: { flexDirection: 'row', padding: 16, gap: 12, borderTopWidth: 1, borderTopColor: '#f5f5f4' },
     field: { marginBottom: 20 },
     fieldLabel: { fontSize: 14, fontWeight: '600', color: '#57534e', marginBottom: 10 },
-    dateRow: { flexDirection: 'row', gap: 8 },
-    dateButton: { alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#f5f5f4' },
+    dateRow: { flexDirection: 'row', gap: 20 },
+    dateButton: { alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#f5f5f4', marginHorizontal: 24 },
     dateButtonSelected: { backgroundColor: '#5D4037' },
     dateDay: { fontSize: 11, color: '#78716c', fontWeight: '600', marginBottom: 2 },
     dateDaySelected: { color: '#D7CCC8' },

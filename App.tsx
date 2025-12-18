@@ -104,6 +104,7 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
                         books={books} isAdmin={isAdmin}
                         onBookClick={setSelectedBook} onAddToCart={handleAddToCart}
                         onEdit={setEditBook} cartItems={cart}
+                        onAddBookPress={() => setShowAddModal(true)}
                     />
                 );
             case 'account':

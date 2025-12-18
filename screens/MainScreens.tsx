@@ -15,10 +15,10 @@ import Button from '../components/Button';
 
 // --- Discover Screen ---
 export const DiscoverScreen = ({
-    books, isAdmin, onBookClick, onAddToCart, onEdit, cartItems
+    books, isAdmin, onBookClick, onAddToCart, onEdit, cartItems, onAddBookPress
 }: {
     books: Book[], isAdmin: boolean, onBookClick: (b: Book) => void,
-    onAddToCart: (b: Book) => void, onEdit: (b: Book) => void, cartItems: Book[]
+    onAddToCart: (b: Book) => void, onEdit: (b: Book) => void, cartItems: Book[], onAddBookPress: () => void
 }) => {
     const [search, setSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -71,6 +71,13 @@ export const DiscoverScreen = ({
                     onChangeText={setSearch}
                 />
             </View>
+
+            {/* Admin Add Book Button */}
+            {isAdmin && (
+                <View style={{ marginBottom: 16 }}>
+                    <Button onPress={onAddBookPress}>Add Book</Button>
+                </View>
+            )}
 
             {!search && (
                 <View style={styles.section}>
