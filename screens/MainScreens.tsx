@@ -5,10 +5,11 @@ import {
 } from 'react-native';
 import {
     Library, Search, MapPin, BookOpen, CheckCircle,
-    Clock, XCircle, AlertCircle, ChevronLeft
+    Clock, XCircle, AlertCircle, ChevronLeft, Camera, Pencil, Check, X
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Book, BookStatus, User, LoanRecord, Booking, Penalty } from '../types';
-import { getLoans, getBookings, getPenalties } from '../services/storage';
+import { getLoans, getBookings, getPenalties, updateUserDetails } from '../services/storage';
 import BookCard from '../components/BookCard';
 import Button from '../components/Button';
 
@@ -118,14 +119,20 @@ export const DiscoverScreen = ({
 
 // --- Account Screen ---
 export const AccountScreen = ({
-    user, isAdmin, onLogout, books
+    user, isAdmin, onLogout, books, onUserUpdate
 }: {
-    user: User, isAdmin: boolean, onLogout: () => void, books: Book[]
+    user: User, isAdmin: boolean, onLogout: () => void, books: Book[], onUserUpdate: (u: User) => void
 }) => {
     const [loans, setLoans] = useState<LoanRecord[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [penalties, setPenalties] = useState<Penalty[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [newName, setNewName] = useState(user.name);
+
+    useEffect(() => {
+        setNewName(user.name);
+    }, [user.name]);
 
     useEffect(() => {
         loadData();
@@ -140,6 +147,45 @@ export const AccountScreen = ({
         setBookings(b.filter(bk => bk.userId === user.id));
         setPenalties(p);
         setLoading(false);
+    };
+
+    const pickImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+
+        if (!result.canceled) {
+            try {
+                // Determine if we need to call updateUserDetails based on user type
+                // Since updateUserDetails handles persistence, we just need to call it.
+                // However, AccountScreen props has 'user', but we need to update the parent state or re-fetch.
+                // The prompt implies we should enable them to change it.
+
+                const updatedUser = await updateUserDetails(user.id, { avatarUrl: result.assets[0].uri });
+                onUserUpdate(updatedUser);
+                Alert.alert("Success", "Profile picture updated!");
+            } catch (error) {
+                Alert.alert("Error", "Failed to update profile picture.");
+            }
+        }
+    };
+
+    const saveName = async () => {
+        if (!newName.trim()) {
+            Alert.alert("Error", "Name cannot be empty");
+            return;
+        }
+        try {
+            const updatedUser = await updateUserDetails(user.id, { name: newName });
+            onUserUpdate(updatedUser);
+            setIsEditingName(false);
+            Alert.alert("Success", "Name updated!");
+        } catch (error) {
+            Alert.alert("Error", "Failed to update name");
+        }
     };
 
     const activeLoans = loans.filter(l => l.status === 'active');
@@ -158,9 +204,49 @@ export const AccountScreen = ({
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             <View style={styles.accountHeader}>
-                <View>
-                    <Text style={styles.headerTitle}>{isAdmin ? 'Admin Portal' : `Hello, ${user.name.split(' ')[0]}`}</Text>
-                    <Text style={styles.headerSubtitle}>{isAdmin ? 'System Overview' : 'Your library dashboard'}</Text>
+                <View style={styles.headerProfileInfo}>
+                    <TouchableOpacity onPress={pickImage} style={styles.profileImageContainer}>
+                        {user.avatarUrl ? (
+                            <Image source={{ uri: user.avatarUrl }} style={styles.profileImage} />
+                        ) : (
+                            <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
+                                <Text style={styles.profileImageText}>{user.name.substring(0, 2).toUpperCase()}</Text>
+                            </View>
+                        )}
+                        <View style={styles.editIconContainer}>
+                            <Camera size={12} color="#fff" />
+                        </View>
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                        {isEditingName && !isAdmin ? (
+                            <View style={styles.editNameContainer}>
+                                <TextInput
+                                    value={newName}
+                                    onChangeText={setNewName}
+                                    style={styles.editNameInput}
+                                    autoFocus
+                                />
+                                <TouchableOpacity onPress={saveName} style={styles.iconButton}>
+                                    <Check size={20} color="#10b981" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => { setIsEditingName(false); setNewName(user.name); }} style={styles.iconButton}>
+                                    <X size={20} color="#ef4444" />
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.nameContainer}>
+                                <Text style={styles.headerTitle}>
+                                    {isAdmin ? 'Admin Portal' : `Hello, ${user.name.split(' ')[0]}`}
+                                </Text>
+                                {!isAdmin && (
+                                    <TouchableOpacity onPress={() => setIsEditingName(true)} style={styles.editIcon}>
+                                        <Pencil size={16} color="#78716c" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+                        <Text style={styles.headerSubtitle}>{isAdmin ? 'System Overview' : 'Your library dashboard'}</Text>
+                    </View>
                 </View>
                 <TouchableOpacity onPress={onLogout} style={styles.logoutButton}>
                     <Text style={styles.logoutText}>Logout</Text>
@@ -231,7 +317,26 @@ const styles = StyleSheet.create({
     backButton: { padding: 4 },
     categoryTitle: { fontSize: 28, fontWeight: '700', color: '#1c1917' },
     listContent: { paddingBottom: 100 },
-    accountHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, marginTop: 8 },
+
+    accountHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 8 },
+    headerProfileInfo: { flexDirection: 'row', alignItems: 'center', gap: 16, flex: 1 },
+    nameContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    editIcon: { padding: 4 },
+    editNameContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    editNameInput: {
+        borderBottomWidth: 1, borderBottomColor: '#5D4037', fontSize: 20, fontWeight: '700',
+        color: '#1c1917', flex: 1, paddingVertical: 4
+    },
+    iconButton: { padding: 4 },
+    profileImageContainer: { position: 'relative' },
+    profileImage: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#e7e5e4' },
+    profileImagePlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#5D4037' },
+    profileImageText: { color: '#fff', fontSize: 24, fontWeight: '700' },
+    editIconContainer: {
+        position: 'absolute', bottom: 0, right: 0, backgroundColor: '#5D4037',
+        width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center',
+        borderWidth: 2, borderColor: '#f5f5f4'
+    },
     logoutButton: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
     logoutText: { color: '#dc2626', fontWeight: '600', fontSize: 12 },
     statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },

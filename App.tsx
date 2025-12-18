@@ -47,7 +47,7 @@ const TabBar = ({ currentTab, onTabChange }: { currentTab: string, onTabChange: 
 };
 
 // Main App Content (After Login)
-const MainApp = ({ user, onLogout }: { user: User, onLogout: () => void }) => {
+const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () => void, onUserUpdate: (u: User) => void }) => {
     const [currentTab, setCurrentTab] = useState('discover');
     const [books, setBooks] = useState<Book[]>([]);
     const [loading, setLoading] = useState(true);
@@ -107,7 +107,7 @@ const MainApp = ({ user, onLogout }: { user: User, onLogout: () => void }) => {
                     />
                 );
             case 'account':
-                return <AccountScreen user={user} isAdmin={isAdmin} onLogout={onLogout} books={books} />;
+                return <AccountScreen user={user} isAdmin={isAdmin} onLogout={onLogout} books={books} onUserUpdate={onUserUpdate} />;
             case 'search':
                 return (
                     <FloorPlanScreen
@@ -189,7 +189,7 @@ export default function App() {
         <SafeAreaProvider>
             <StatusBar style="dark" />
             {user ? (
-                <MainApp user={user} onLogout={handleLogout} />
+                <MainApp user={user} onLogout={handleLogout} onUserUpdate={setUser} />
             ) : (
                 <LoginScreen onLogin={handleLogin} />
             )}
