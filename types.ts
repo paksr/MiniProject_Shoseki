@@ -60,6 +60,7 @@ export interface Booking {
   createdAt: string;
   status: BookingStatus;
   capacity?: number;
+  userEmail?: string; // Added for Admin display
 }
 
 export interface Penalty {

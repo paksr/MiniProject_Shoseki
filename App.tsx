@@ -7,7 +7,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Library, Search, CalendarDays, User as UserIcon } from 'lucide-react-native';
 
 
-import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation } from './services/storage';
+import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation } from './services/supabaseStorage';
+// import { borrowBooks, reserveBook, getReservations, cancelReservation } from './services/storage'; // Removed local storage
 import { User, Book, BookStatus, Reservation } from './types';
 import LoginScreen from './screens/LoginScreen';
 import { DiscoverScreen, AccountScreen } from './screens/MainScreens';

@@ -9,7 +9,8 @@ import {
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Book, BookStatus, User, LoanRecord, Booking, Penalty, Reservation } from '../types';
-import { getLoans, getBookings, getPenalties, updateUserDetails, getReservations, cancelReservation } from '../services/storage';
+import { getBookings, getPenalties } from '../services/storage';
+import { updateUserDetails, getLoans, getReservations, cancelReservation } from '../services/supabaseStorage';
 import BookCard from '../components/BookCard';
 import Button from '../components/Button';
 

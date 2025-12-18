@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Shield, User as UserIcon, BookOpen } from 'lucide-react-native';
 import { User } from '../types';
-import { createUser, loginUser, loginAdmin, getUsers } from '../services/storage';
+import { createUser, loginUser, loginAdmin, getUsers } from '../services/supabaseStorage';
 import Button from '../components/Button';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

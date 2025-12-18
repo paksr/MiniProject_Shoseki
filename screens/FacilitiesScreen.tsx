@@ -7,7 +7,7 @@ import {
     Users, Armchair, MessageSquare, Plus, Clock, X, Calendar, Check
 } from 'lucide-react-native';
 import { User, Booking, BookingStatus } from '../types';
-import { getBookings, addBooking, cancelBooking, updateBookingStatus } from '../services/storage';
+import { getBookings, addBooking, cancelBooking, updateBookingStatus } from '../services/supabaseStorage';
 import Button from '../components/Button';
 
 interface FacilitiesScreenProps {
@@ -33,6 +33,8 @@ const TIME_SLOTS = [
 
 const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
     const [showBookingModal, setShowBookingModal] = useState(false);
     const [selectedFacility, setSelectedFacility] = useState<typeof FACILITIES[0] | null>(null);
     const [selectedDate, setSelectedDate] = useState('');
@@ -121,6 +123,23 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
             return;
         }
 
+        // CHECK: Single Active Booking Limit
+        // Check if user has any other booking that is not 'rejected' and not in the past
+        const now = new Date();
+        const hasActiveBooking = bookings.some(b => {
+            if (b.userId !== user.id) return false;
+            if (b.status === 'rejected') return false;
+
+            // Construct booking end time object
+            const bookingEnd = new Date(`${b.date}T${b.endTime}:00`);
+            return bookingEnd > now;
+        });
+
+        if (hasActiveBooking) {
+            Alert.alert('Limit Reached', 'You already have an active or upcoming booking. You can only make one booking at a time.');
+            return;
+        }
+
         // VALIDATION: Check for overlaps
         // We check against ALL bookings (pending and approved) to prevent double booking.
         // Or should we only check approved? Usually pending also reserves the slot until rejected.
@@ -203,7 +222,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                             <Text style={styles.bookingName}>{booking.facilityName}</Text>
                             <Text style={styles.paxTag}>{booking.pax} PAX</Text>
                         </View>
-                        <Text style={styles.adminUserText}>User ID: {booking.userId}</Text>
+                        <Text style={styles.adminUserText}>User: {booking.userEmail || booking.userId}</Text>
                         <Text style={styles.bookingDetails}>{formatDateTime(booking.date, booking.startTime)} - {booking.endTime}</Text>
 
                         <View style={styles.adminActions}>
@@ -231,7 +250,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                         <View style={styles.bookingInfo}>
                             <Text style={styles.bookingName}>{booking.facilityName}</Text>
                             <Text style={styles.bookingDetails}>{formatDateTime(booking.date, booking.startTime)} - {booking.endTime}</Text>
-                            <Text style={[styles.bookingDetails, { marginTop: 2 }]}>User: {booking.userId}</Text>
+                            <Text style={[styles.bookingDetails, { marginTop: 2 }]}>User: {booking.userEmail || booking.userId}</Text>
                         </View>
                         <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
                             <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status.toUpperCase()}</Text>
@@ -244,7 +263,6 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
 
     const renderUserView = () => (
         <View>
-            {/* Facilities Grid */}
             <View style={styles.grid}>
                 {FACILITIES.map(facility => {
                     const IconComponent = facility.icon;
@@ -265,7 +283,6 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                 })}
             </View>
 
-            {/* Upcoming Bookings */}
             <View style={styles.bookingsSection}>
                 <View style={styles.bookingsHeader}>
                     <Clock size={16} color="#78716c" />
@@ -283,7 +300,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                             <TouchableOpacity
                                 key={booking.id}
                                 style={styles.bookingCard}
-                                onLongPress={() => handleCancelBooking(booking.id)}
+                                onPress={() => setSelectedBooking(booking)}
                             >
                                 <View style={styles.bookingInfo}>
                                     <Text style={styles.bookingName}>{booking.facilityName}</Text>
@@ -307,7 +324,6 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     return (
         <View style={styles.container}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                {/* Header */}
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.title}>Facilities</Text>
@@ -320,7 +336,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            {/* Booking Modal */}
+            {/* Booking Creation Modal */}
             <Modal
                 visible={showBookingModal}
                 animationType="slide"
@@ -337,7 +353,6 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                         </View>
 
                         <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                            {/* Date Selection */}
                             <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Date</Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
@@ -345,10 +360,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                         const date = new Date();
                                         date.setDate(date.getDate() + offset);
                                         const dateStr = date.toISOString().split('T')[0];
-                                        // Skip rendering if the date is a Sunday
-                                        if (isSunday(dateStr)) {
-                                            return null;
-                                        }
+                                        if (isSunday(dateStr)) return null;
                                         const isSelected = selectedDate === dateStr;
                                         return (
                                             <TouchableOpacity
@@ -368,7 +380,6 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                 </ScrollView>
                             </View>
 
-                            {/* Time Selection */}
                             <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Start Time</Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -376,16 +387,10 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                         {availableTimeSlots.slice(0, -1).map(time => (
                                             <TouchableOpacity
                                                 key={time}
-                                                style={[
-                                                    styles.timeButton,
-                                                    selectedStartTime === time && styles.timeButtonSelected
-                                                ]}
+                                                style={[styles.timeButton, selectedStartTime === time && styles.timeButtonSelected]}
                                                 onPress={() => setSelectedStartTime(time)}
                                             >
-                                                <Text style={[
-                                                    styles.timeText,
-                                                    selectedStartTime === time && styles.timeTextSelected
-                                                ]}>
+                                                <Text style={[styles.timeText, selectedStartTime === time && styles.timeTextSelected]}>
                                                     {time}
                                                 </Text>
                                             </TouchableOpacity>
@@ -401,16 +406,10 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                         {availableTimeSlots.slice(1).map(time => (
                                             <TouchableOpacity
                                                 key={time}
-                                                style={[
-                                                    styles.timeButton,
-                                                    selectedEndTime === time && styles.timeButtonSelected
-                                                ]}
+                                                style={[styles.timeButton, selectedEndTime === time && styles.timeButtonSelected]}
                                                 onPress={() => setSelectedEndTime(time)}
                                             >
-                                                <Text style={[
-                                                    styles.timeText,
-                                                    selectedEndTime === time && styles.timeTextSelected
-                                                ]}>
+                                                <Text style={[styles.timeText, selectedEndTime === time && styles.timeTextSelected]}>
                                                     {time}
                                                 </Text>
                                             </TouchableOpacity>
@@ -419,7 +418,6 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                 </ScrollView>
                             </View>
 
-                            {/* PAX Input */}
                             <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Number of People (Max: {selectedFacility?.capacity})</Text>
                                 <TextInput
@@ -442,6 +440,79 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                 <Text style={styles.confirmText}>Confirm Booking</Text>
                             </Button>
                         </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Booking DETAILS Modal */}
+            <Modal
+                visible={!!selectedBooking}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setSelectedBooking(null)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Booking Details</Text>
+                            <TouchableOpacity onPress={() => setSelectedBooking(null)}>
+                                <X size={24} color="#78716c" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {selectedBooking && (
+                            <View style={{ padding: 24 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+                                    <View style={{ width: 64, height: 64, borderRadius: 16, backgroundColor: '#f5f5f4', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                        <Calendar size={32} color="#5D4037" />
+                                    </View>
+                                    <View>
+                                        <Text style={{ fontSize: 20, fontWeight: '700', color: '#1c1917' }}>{selectedBooking.facilityName}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                                            <View style={[styles.statusBadge, {
+                                                backgroundColor: selectedBooking.status === 'approved' ? '#dcfce7' :
+                                                    selectedBooking.status === 'rejected' ? '#fee2e2' : '#fef3c7'
+                                            }]}>
+                                                <Text style={[styles.statusText, {
+                                                    color: selectedBooking.status === 'approved' ? '#16a34a' :
+                                                        selectedBooking.status === 'rejected' ? '#dc2626' : '#d97706'
+                                                }]}>
+                                                    {selectedBooking.status.toUpperCase()}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                <View style={{ gap: 16 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f4' }}>
+                                        <Text style={{ color: '#78716c', fontWeight: '500' }}>Date</Text>
+                                        <Text style={{ color: '#1c1917', fontWeight: '600' }}>{new Date(selectedBooking.date).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f4' }}>
+                                        <Text style={{ color: '#78716c', fontWeight: '500' }}>Time</Text>
+                                        <Text style={{ color: '#1c1917', fontWeight: '600' }}>{selectedBooking.startTime} - {selectedBooking.endTime}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f4' }}>
+                                        <Text style={{ color: '#78716c', fontWeight: '500' }}>Group Size</Text>
+                                        <Text style={{ color: '#1c1917', fontWeight: '600' }}>{selectedBooking.pax} People</Text>
+                                    </View>
+                                </View>
+
+                                {selectedBooking.status !== 'rejected' && (
+                                    <Button
+                                        style={{ marginTop: 32, backgroundColor: '#fee2e2' }}
+                                        onPress={() => {
+                                            setSelectedBooking(null);
+                                            handleCancelBooking(selectedBooking.id);
+                                        }}
+                                    >
+                                        <X size={18} color="#dc2626" />
+                                        <Text style={{ color: '#dc2626', fontWeight: '700' }}>Cancel Booking</Text>
+                                    </Button>
+                                )}
+                            </View>
+                        )}
                     </View>
                 </View>
             </Modal>
