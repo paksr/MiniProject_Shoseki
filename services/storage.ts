@@ -267,13 +267,15 @@ export const returnBook = async (bookId: string): Promise<void> => {
     await updateBookStatus(bookId, BookStatus.Available);
 };
 
-export const reserveBook = async (userId: string, bookId: string, bookTitle: string): Promise<Reservation> => {
+export const reserveBook = async (userId: string, bookId: string, bookTitle: string, bookAuthor: string, coverUrl: string): Promise<Reservation> => {
     const reservations = await getReservations();
     const newReservation: Reservation = {
         id: Date.now().toString(),
         userId,
         bookId,
         bookTitle,
+        bookAuthor,
+        coverUrl,
         reservedAt: new Date().toISOString(),
         status: 'active'
     };
@@ -288,6 +290,15 @@ export const getReservations = async (): Promise<Reservation[]> => {
         return stored ? JSON.parse(stored) : [];
     } catch {
         return [];
+    }
+};
+
+export const cancelReservation = async (reservationId: string): Promise<void> => {
+    const reservations = await getReservations();
+    const index = reservations.findIndex(r => r.id === reservationId);
+    if (index !== -1) {
+        reservations[index].status = 'cancelled';
+        await AsyncStorage.setItem(RESERVATIONS_KEY, JSON.stringify(reservations));
     }
 };
 

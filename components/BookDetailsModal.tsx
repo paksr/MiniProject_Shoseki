@@ -10,7 +10,7 @@ import {
     Dimensions,
     Alert
 } from 'react-native';
-import { X, BookOpen, MapPin, Hash, Layers, ShoppingBag, Pencil, Trash2 } from 'lucide-react-native';
+import { X, BookOpen, MapPin, Hash, Layers, ShoppingBag, Pencil, Trash2, Clock } from 'lucide-react-native';
 import { Book, BookStatus } from '../types';
 import Button from './Button';
 
@@ -19,16 +19,18 @@ interface BookDetailsModalProps {
     onClose: () => void;
     isAdmin: boolean;
     onAddToCart?: (book: Book) => void;
+    onReserve?: (book: Book) => void;
     onEdit?: (book: Book) => void;
     onDelete?: (id: string) => void;
     isInCart?: boolean;
+    isReserved?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1524578271613-d550eacf6090?q=80&w=600&auto=format&fit=crop";
 
 const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
-    book, onClose, isAdmin, onAddToCart, onEdit, onDelete, isInCart
+    book, onClose, isAdmin, onAddToCart, onReserve, onEdit, onDelete, isInCart, isReserved
 }) => {
     const [imgError, setImgError] = useState(false);
 
@@ -185,6 +187,17 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                                         <ShoppingBag size={18} color={isInCart ? '#a8a29e' : '#fff'} />
                                         <Text style={[styles.footerButtonText, isInCart && styles.footerButtonTextDisabled]}>
                                             {isInCart ? 'In Cart' : 'Borrow Book'}
+                                        </Text>
+                                    </Button>
+                                ) : book.status === BookStatus.OnLoan ? (
+                                    <Button
+                                        onPress={() => { onReserve && onReserve(book); onClose(); }}
+                                        disabled={isReserved}
+                                        style={[styles.footerButton, styles.reserveButton, isReserved && styles.footerButtonDisabled]}
+                                    >
+                                        <Clock size={18} color={isReserved ? '#a8a29e' : '#fff'} />
+                                        <Text style={[styles.footerButtonText, isReserved && styles.footerButtonTextDisabled]}>
+                                            {isReserved ? 'Already Reserved' : 'Reserve Book'}
                                         </Text>
                                     </Button>
                                 ) : (
@@ -390,6 +403,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#fee2e2',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    reserveButton: {
+        backgroundColor: '#f59e0b',
     },
 });
 

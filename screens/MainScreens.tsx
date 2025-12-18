@@ -8,8 +8,8 @@ import {
     Clock, XCircle, AlertCircle, ChevronLeft, Camera, Pencil, Check, X
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Book, BookStatus, User, LoanRecord, Booking, Penalty } from '../types';
-import { getLoans, getBookings, getPenalties, updateUserDetails } from '../services/storage';
+import { Book, BookStatus, User, LoanRecord, Booking, Penalty, Reservation } from '../types';
+import { getLoans, getBookings, getPenalties, updateUserDetails, getReservations, cancelReservation } from '../services/storage';
 import BookCard from '../components/BookCard';
 import Button from '../components/Button';
 
@@ -141,6 +141,7 @@ export const AccountScreen = ({
     const [loans, setLoans] = useState<LoanRecord[]>([]);
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [penalties, setPenalties] = useState<Penalty[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(user.name);
@@ -158,10 +159,24 @@ export const AccountScreen = ({
         const l = await getLoans(user.id);
         const b = await getBookings();
         const p = await getPenalties(user.id);
+        const r = await getReservations();
         setLoans(l);
         setBookings(b.filter(bk => bk.userId === user.id));
         setPenalties(p);
+        setReservations(r.filter(res => res.userId === user.id && res.status === 'active'));
         setLoading(false);
+    };
+
+    const handleCancelReservation = async (reservationId: string) => {
+        Alert.alert('Cancel Reservation', 'Are you sure you want to cancel this reservation?', [
+            { text: 'No', style: 'cancel' },
+            {
+                text: 'Yes', style: 'destructive', onPress: async () => {
+                    await cancelReservation(reservationId);
+                    loadData();
+                }
+            }
+        ]);
     };
 
     const pickImage = async () => {
@@ -309,6 +324,31 @@ export const AccountScreen = ({
                             </View>
                         ))
                     )}
+
+                    <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Reserved Books</Text>
+                    {reservations.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyText}>No active reservations</Text>
+                        </View>
+                    ) : (
+                        reservations.map(reservation => (
+                            <View key={reservation.id} style={styles.reservationCard}>
+                                <View style={styles.reservationInfo}>
+                                    <Clock size={16} color="#f59e0b" />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.reservationTitle} numberOfLines={1}>{reservation.bookTitle}</Text>
+                                        <Text style={styles.reservationDate}>Reserved: {new Date(reservation.reservedAt).toLocaleDateString()}</Text>
+                                    </View>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.cancelButton}
+                                    onPress={() => handleCancelReservation(reservation.id)}
+                                >
+                                    <X size={16} color="#ef4444" />
+                                </TouchableOpacity>
+                            </View>
+                        ))
+                    )}
                 </>
             )}
             <View style={{ height: 100 }} />
@@ -365,4 +405,9 @@ const styles = StyleSheet.create({
     loanInfo: { flex: 1, justifyContent: 'center' },
     loanTitle: { fontSize: 14, fontWeight: '700', color: '#1c1917', marginBottom: 4 },
     loanDue: { fontSize: 12, color: '#78716c' },
+    reservationCard: { flexDirection: 'row', backgroundColor: '#fffbeb', padding: 12, borderRadius: 12, marginBottom: 8, alignItems: 'center', borderWidth: 1, borderColor: '#fde68a' },
+    reservationInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+    reservationTitle: { fontSize: 14, fontWeight: '700', color: '#1c1917', marginBottom: 2 },
+    reservationDate: { fontSize: 12, color: '#92400e' },
+    cancelButton: { padding: 8, backgroundColor: '#fee2e2', borderRadius: 20 },
 });

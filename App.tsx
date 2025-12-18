@@ -6,12 +6,14 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Library, Search, CalendarDays, User as UserIcon } from 'lucide-react-native';
 
-import { User, Book, BookStatus } from './types';
-import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks } from './services/storage';
+
+import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation } from './services/storage';
+import { User, Book, BookStatus, Reservation } from './types';
 import LoginScreen from './screens/LoginScreen';
 import { DiscoverScreen, AccountScreen } from './screens/MainScreens';
 import FloorPlanScreen from './screens/FloorPlanScreen';
 import FacilitiesScreen from './screens/FacilitiesScreen';
+import CartScreen from './screens/CartScreen';
 import BookCard from './components/BookCard';
 import BookDetailsModal from './components/BookDetailsModal';
 import AddBookModal from './components/AddBookModal';
@@ -55,11 +57,14 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
     const [editBook, setEditBook] = useState<Book | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [cart, setCart] = useState<Book[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [showCart, setShowCart] = useState(false);
 
     const isAdmin = user.role === 'admin';
 
     useEffect(() => {
         loadBooks();
+        loadReservations();
     }, []);
 
     const loadBooks = async () => {
@@ -69,16 +74,36 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
         setLoading(false);
     };
 
+    const loadReservations = async () => {
+        const r = await getReservations();
+        setReservations(r.filter(res => res.userId === user.id && res.status === 'active'));
+    };
+
     const handleAddToCart = (book: Book) => {
         if (!cart.find(c => c.id === book.id)) {
             setCart([...cart, book]);
         }
     };
 
+    const handleRemoveFromCart = (bookId: string) => {
+        setCart(cart.filter(c => c.id !== bookId));
+    };
+
     const handleCheckout = async () => {
         await borrowBooks(user.id, cart.map(c => c.id));
         setCart([]);
+        setShowCart(false);
         loadBooks();
+    };
+
+    const handleReserve = async (book: Book) => {
+        await reserveBook(user.id, book.id, book.title, book.author, book.coverUrl);
+        loadReservations();
+    };
+
+    const handleCancelReservation = async (reservationId: string) => {
+        await cancelReservation(reservationId);
+        loadReservations();
     };
 
     const handleAddBook = async (bookData: Omit<Book, 'id' | 'addedAt'>) => {
@@ -141,7 +166,9 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
                 <BookDetailsModal
                     book={selectedBook} onClose={() => setSelectedBook(null)}
                     isAdmin={isAdmin} onAddToCart={handleAddToCart}
+                    onReserve={handleReserve}
                     onEdit={setEditBook} isInCart={cart.some(c => c.id === selectedBook.id)}
+                    isReserved={reservations.some(r => r.bookId === selectedBook.id)}
                     onDelete={handleDeleteBook}
                 />
             )}
@@ -154,10 +181,23 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
                 />
             )}
 
-            {cart.length > 0 && !isAdmin && (
-                <TouchableOpacity style={styles.cartBadge} onPress={handleCheckout}>
-                    <Text style={styles.cartText}>Checkout ({cart.length})</Text>
+            {(cart.length > 0 || reservations.length > 0) && !isAdmin && (
+                <TouchableOpacity style={styles.cartBadge} onPress={() => setShowCart(true)}>
+                    <Text style={styles.cartText}>View Cart ({cart.length + reservations.length})</Text>
                 </TouchableOpacity>
+            )}
+
+            {showCart && (
+                <View style={styles.cartOverlay}>
+                    <CartScreen
+                        cart={cart}
+                        reservations={reservations}
+                        onRemoveFromCart={handleRemoveFromCart}
+                        onCancelReservation={handleCancelReservation}
+                        onCheckout={handleCheckout}
+                        onClose={() => setShowCart(false)}
+                    />
+                </View>
             )}
         </SafeAreaView>
     );
@@ -215,4 +255,5 @@ const styles = StyleSheet.create({
     placeholderText: { fontSize: 16, color: '#a8a29e' },
     cartBadge: { position: 'absolute', bottom: 100, left: 16, right: 16, backgroundColor: '#5D4037', padding: 16, borderRadius: 16, alignItems: 'center' },
     cartText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    cartOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#f5f5f4', zIndex: 100 },
 });

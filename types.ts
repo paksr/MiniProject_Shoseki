@@ -76,6 +76,8 @@ export interface Reservation {
   userId: string;
   bookId: string;
   bookTitle: string;
+  bookAuthor: string;
+  coverUrl: string;
   reservedAt: string;
   status: 'active' | 'fulfilled' | 'cancelled';
 }
