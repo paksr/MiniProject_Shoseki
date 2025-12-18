@@ -23,7 +23,8 @@ const FACILITIES = [
 ];
 
 const TIME_SLOTS = [
-    '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
+    '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00',
+    '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'
 ];
 
 const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
@@ -44,6 +45,12 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
         setBookings(b.filter(bk => bk.userId === user.id));
     };
 
+    const isTimeDisabled = (time: string) => {
+        if (!selectedDate) return false;
+        const dateTime = new Date(`${selectedDate}T${time}:00`);
+        return dateTime < new Date();
+    };
+
     const handleFacilityPress = (facility: typeof FACILITIES[0]) => {
         setSelectedFacility(facility);
         setPax('1');
@@ -56,6 +63,17 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     const handleBooking = async () => {
         if (!selectedFacility || !selectedDate || !selectedStartTime || !selectedEndTime) {
             Alert.alert('Error', 'Please fill in all fields');
+            return;
+        }
+
+        if (selectedStartTime >= selectedEndTime) {
+            Alert.alert('Error', 'End time must be after start time');
+            return;
+        }
+
+        const bookingStart = new Date(`${selectedDate}T${selectedStartTime}:00`);
+        if (bookingStart < new Date()) {
+            Alert.alert('Error', 'Cannot book a time in the past');
             return;
         }
 
@@ -102,6 +120,8 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
             default: return { bg: '#fef3c7', text: '#d97706' };
         }
     };
+
+    const availableTimeSlots = TIME_SLOTS.filter(time => !isTimeDisabled(time));
 
     return (
         <View style={styles.container}>
@@ -224,13 +244,19 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                 <Text style={styles.fieldLabel}>Start Time</Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                     <View style={styles.timeRow}>
-                                        {TIME_SLOTS.slice(0, -1).map(time => (
+                                        {availableTimeSlots.slice(0, -1).map(time => (
                                             <TouchableOpacity
                                                 key={time}
-                                                style={[styles.timeButton, selectedStartTime === time && styles.timeButtonSelected]}
+                                                style={[
+                                                    styles.timeButton,
+                                                    selectedStartTime === time && styles.timeButtonSelected
+                                                ]}
                                                 onPress={() => setSelectedStartTime(time)}
                                             >
-                                                <Text style={[styles.timeText, selectedStartTime === time && styles.timeTextSelected]}>
+                                                <Text style={[
+                                                    styles.timeText,
+                                                    selectedStartTime === time && styles.timeTextSelected
+                                                ]}>
                                                     {time}
                                                 </Text>
                                             </TouchableOpacity>
@@ -243,13 +269,19 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                 <Text style={styles.fieldLabel}>End Time</Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                     <View style={styles.timeRow}>
-                                        {TIME_SLOTS.slice(1).map(time => (
+                                        {availableTimeSlots.slice(1).map(time => (
                                             <TouchableOpacity
                                                 key={time}
-                                                style={[styles.timeButton, selectedEndTime === time && styles.timeButtonSelected]}
+                                                style={[
+                                                    styles.timeButton,
+                                                    selectedEndTime === time && styles.timeButtonSelected
+                                                ]}
                                                 onPress={() => setSelectedEndTime(time)}
                                             >
-                                                <Text style={[styles.timeText, selectedEndTime === time && styles.timeTextSelected]}>
+                                                <Text style={[
+                                                    styles.timeText,
+                                                    selectedEndTime === time && styles.timeTextSelected
+                                                ]}>
                                                     {time}
                                                 </Text>
                                             </TouchableOpacity>
@@ -336,6 +368,8 @@ const styles = StyleSheet.create({
     input: { backgroundColor: '#f5f5f4', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#1c1917' },
     cancelText: { color: '#5D4037', fontWeight: '600' },
     confirmText: { color: '#fff', fontWeight: '600' },
+    timeButtonDisabled: { opacity: 0.3, backgroundColor: '#e5e5e5' },
+    timeTextDisabled: { color: '#a3a3a3' },
 });
 
 export default FacilitiesScreen;
