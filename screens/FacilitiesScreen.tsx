@@ -6,13 +6,17 @@ import {
 import {
     Users, Armchair, MessageSquare, Plus, Clock, X, Calendar, Check
 } from 'lucide-react-native';
-import { User, Booking } from '../types';
-import { getBookings, addBooking, cancelBooking } from '../services/storage';
+import { User, Booking, BookingStatus } from '../types';
+import { getBookings, addBooking, cancelBooking, updateBookingStatus } from '../services/storage';
 import Button from '../components/Button';
 
 interface FacilitiesScreenProps {
     user: User;
 }
+
+const formatDateTime = (date: string, time: string) => {
+    return `${new Date(date).toLocaleDateString()} • ${time}`;
+};
 
 const FACILITIES = [
     { id: 'meeting-a', name: 'Meeting Room A', capacity: 6, icon: Users, color: '#ea580c' },
@@ -36,19 +40,43 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     const [selectedEndTime, setSelectedEndTime] = useState('');
     const [pax, setPax] = useState('1');
 
+    const isAdmin = user.role === 'admin';
+
     useEffect(() => {
         loadBookings();
     }, []);
 
     const loadBookings = async () => {
         const b = await getBookings();
-        setBookings(b.filter(bk => bk.userId === user.id));
+        // Determine sorting: Pending first, then by date desc
+        b.sort((a, b) => {
+            if (a.status === 'pending' && b.status !== 'pending') return -1;
+            if (a.status !== 'pending' && b.status === 'pending') return 1;
+            return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
+        setBookings(b);
     };
 
     const isTimeDisabled = (time: string) => {
         if (!selectedDate) return false;
+
+        // Past time check
         const dateTime = new Date(`${selectedDate}T${time}:00`);
-        return dateTime < new Date();
+        if (dateTime < new Date()) return true;
+
+        // Overlap check (visual only, strict check on submit)
+        // Check if this specific hour is part of any APPROVED booking for this facility
+        if (selectedFacility) {
+            const hasConflict = bookings.some(b =>
+                b.facilityId === selectedFacility.id &&
+                b.date === selectedDate &&
+                b.status === 'approved' &&
+                time >= b.startTime && time < b.endTime
+            );
+            if (hasConflict) return true;
+        }
+
+        return false;
     };
 
     // Helper to determine if a given date string (YYYY-MM-DD) is a Sunday
@@ -93,6 +121,23 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
             return;
         }
 
+        // VALIDATION: Check for overlaps
+        // We check against ALL bookings (pending and approved) to prevent double booking.
+        // Or should we only check approved? Usually pending also reserves the slot until rejected.
+        // Let's check 'approved' and 'pending'.
+        const hasOverlap = bookings.some(b => {
+            if (b.facilityId !== selectedFacility.id || b.date !== selectedDate) return false;
+            if (b.status === 'rejected') return false; // Rejected bookings don't block
+
+            // Check if time ranges overlap: (StartA < EndB) and (EndA > StartB)
+            return (selectedStartTime < b.endTime && selectedEndTime > b.startTime);
+        });
+
+        if (hasOverlap) {
+            Alert.alert('Unavailable', 'This time slot overlaps with an existing booking.');
+            return;
+        }
+
         await addBooking({
             facilityId: selectedFacility.id,
             facilityName: selectedFacility.name,
@@ -121,7 +166,17 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
         ]);
     };
 
-    const upcomingBookings = bookings.filter(b => new Date(b.date) >= new Date());
+    const handleUpdateStatus = async (id: string, status: BookingStatus) => {
+        await updateBookingStatus(id, status);
+        loadBookings();
+    };
+
+    // Filter bookings for display
+    const myUpcomingBookings = bookings.filter(b => b.userId === user.id && new Date(b.date) >= new Date());
+
+    // Admin Lists
+    const pendingBookings = bookings.filter(b => b.status === 'pending');
+    const historyBookings = bookings.filter(b => b.status !== 'pending');
 
     const getStatusStyle = (status: string) => {
         switch (status) {
@@ -133,6 +188,122 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
 
     const availableTimeSlots = TIME_SLOTS.filter(time => !isTimeDisabled(time));
 
+    const renderAdminView = () => (
+        <View style={styles.gridContainer}>
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Pending Requests</Text>
+            </View>
+
+            {pendingBookings.length === 0 ? (
+                <View style={styles.emptyState}><Text style={styles.emptyText}>No pending requests.</Text></View>
+            ) : (
+                pendingBookings.map(booking => (
+                    <View key={booking.id} style={styles.adminCard}>
+                        <View style={styles.adminCardHeader}>
+                            <Text style={styles.bookingName}>{booking.facilityName}</Text>
+                            <Text style={styles.paxTag}>{booking.pax} PAX</Text>
+                        </View>
+                        <Text style={styles.adminUserText}>User ID: {booking.userId}</Text>
+                        <Text style={styles.bookingDetails}>{formatDateTime(booking.date, booking.startTime)} - {booking.endTime}</Text>
+
+                        <View style={styles.adminActions}>
+                            <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => handleUpdateStatus(booking.id, 'rejected')}>
+                                <X size={16} color="#dc2626" />
+                                <Text style={styles.rejectText}>Reject</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} onPress={() => handleUpdateStatus(booking.id, 'approved')}>
+                                <Check size={16} color="#16a34a" />
+                                <Text style={styles.approveText}>Approve</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                ))
+            )}
+
+            <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+                <Text style={styles.sectionTitle}>Booking History</Text>
+            </View>
+
+            {historyBookings.map(booking => {
+                const statusStyle = getStatusStyle(booking.status);
+                return (
+                    <View key={booking.id} style={styles.bookingCard}>
+                        <View style={styles.bookingInfo}>
+                            <Text style={styles.bookingName}>{booking.facilityName}</Text>
+                            <Text style={styles.bookingDetails}>{formatDateTime(booking.date, booking.startTime)} - {booking.endTime}</Text>
+                            <Text style={[styles.bookingDetails, { marginTop: 2 }]}>User: {booking.userId}</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                            <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status.toUpperCase()}</Text>
+                        </View>
+                    </View>
+                );
+            })}
+        </View>
+    );
+
+    const renderUserView = () => (
+        <View>
+            {/* Facilities Grid */}
+            <View style={styles.grid}>
+                {FACILITIES.map(facility => {
+                    const IconComponent = facility.icon;
+                    return (
+                        <TouchableOpacity
+                            key={facility.id}
+                            style={styles.facilityCard}
+                            onPress={() => handleFacilityPress(facility)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[styles.facilityIcon, { backgroundColor: `${facility.color}15` }]}>
+                                <IconComponent size={24} color={facility.color} />
+                            </View>
+                            <Text style={styles.facilityName}>{facility.name}</Text>
+                            <Text style={styles.facilityCapacity}>{facility.capacity} PAX</Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+
+            {/* Upcoming Bookings */}
+            <View style={styles.bookingsSection}>
+                <View style={styles.bookingsHeader}>
+                    <Clock size={16} color="#78716c" />
+                    <Text style={styles.bookingsTitle}>My Upcoming Bookings</Text>
+                </View>
+
+                {myUpcomingBookings.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyText}>No bookings yet.</Text>
+                    </View>
+                ) : (
+                    myUpcomingBookings.map(booking => {
+                        const statusStyle = getStatusStyle(booking.status);
+                        return (
+                            <TouchableOpacity
+                                key={booking.id}
+                                style={styles.bookingCard}
+                                onLongPress={() => handleCancelBooking(booking.id)}
+                            >
+                                <View style={styles.bookingInfo}>
+                                    <Text style={styles.bookingName}>{booking.facilityName}</Text>
+                                    <Text style={styles.bookingDetails}>
+                                        {formatDateTime(booking.date, booking.startTime)} - {booking.endTime}
+                                    </Text>
+                                </View>
+                                <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                                        {booking.status.toUpperCase()}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })
+                )}
+            </View>
+        </View>
+    );
+
     return (
         <View style={styles.container}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -140,67 +311,11 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.title}>Facilities</Text>
-                        <Text style={styles.subtitle}>Book rooms & desks</Text>
+                        <Text style={styles.subtitle}>{isAdmin ? 'Manage Facility Bookings' : 'Book rooms & desks'}</Text>
                     </View>
                 </View>
 
-                {/* Facilities Grid */}
-                <View style={styles.grid}>
-                    {FACILITIES.map(facility => {
-                        const IconComponent = facility.icon;
-                        return (
-                            <TouchableOpacity
-                                key={facility.id}
-                                style={styles.facilityCard}
-                                onPress={() => handleFacilityPress(facility)}
-                                activeOpacity={0.7}
-                            >
-                                <View style={[styles.facilityIcon, { backgroundColor: `${facility.color}15` }]}>
-                                    <IconComponent size={24} color={facility.color} />
-                                </View>
-                                <Text style={styles.facilityName}>{facility.name}</Text>
-                                <Text style={styles.facilityCapacity}>{facility.capacity} PAX</Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-
-                {/* Upcoming Bookings */}
-                <View style={styles.bookingsSection}>
-                    <View style={styles.bookingsHeader}>
-                        <Clock size={16} color="#78716c" />
-                        <Text style={styles.bookingsTitle}>Upcoming Bookings</Text>
-                    </View>
-
-                    {upcomingBookings.length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyText}>No bookings yet.</Text>
-                        </View>
-                    ) : (
-                        upcomingBookings.map(booking => {
-                            const statusStyle = getStatusStyle(booking.status);
-                            return (
-                                <TouchableOpacity
-                                    key={booking.id}
-                                    style={styles.bookingCard}
-                                    onLongPress={() => handleCancelBooking(booking.id)}
-                                >
-                                    <View style={styles.bookingInfo}>
-                                        <Text style={styles.bookingName}>{booking.facilityName}</Text>
-                                        <Text style={styles.bookingDetails}>
-                                            {new Date(booking.date).toLocaleDateString()} • {booking.startTime} - {booking.endTime}
-                                        </Text>
-                                    </View>
-                                    <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                                        <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                                            {booking.status.toUpperCase()}
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })
-                    )}
-                </View>
+                {isAdmin ? renderAdminView() : renderUserView()}
 
                 <View style={{ height: 100 }} />
             </ScrollView>
@@ -384,6 +499,21 @@ const styles = StyleSheet.create({
     confirmText: { color: '#fff', fontWeight: '600' },
     timeButtonDisabled: { opacity: 0.3, backgroundColor: '#e5e5e5' },
     timeTextDisabled: { color: '#a3a3a3' },
+
+    // Admin Styles
+    gridContainer: { gap: 16 },
+    sectionHeader: { marginBottom: 12 },
+    sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1c1917' },
+    adminCard: { backgroundColor: '#fff', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#f5f5f4', marginBottom: 12 },
+    adminCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    paxTag: { fontSize: 12, fontWeight: '600', color: '#78716c', backgroundColor: '#f5f5f4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    adminUserText: { fontSize: 13, color: '#57534e', marginBottom: 4 },
+    adminActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10, borderRadius: 10, gap: 6 },
+    approveBtn: { backgroundColor: '#dcfce7' },
+    rejectBtn: { backgroundColor: '#fee2e2' },
+    approveText: { fontSize: 14, fontWeight: '700', color: '#16a34a' },
+    rejectText: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
 });
 
 export default FacilitiesScreen;
