@@ -9,9 +9,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
-import { X, Search, Sparkles, BookOpen, Save } from 'lucide-react-native';
+import { X, Search, Sparkles, BookOpen, Save, Camera, Pencil } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import Button from './Button';
 import { generateBookDetails } from '../services/geminiService';
 import { Book, BookStatus } from '../types';
@@ -51,6 +53,19 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
       });
     }
   }, [initialBook]);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [2, 3], // Book cover aspect ratio
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setFormData(prev => ({ ...prev, coverUrl: result.assets[0].uri }));
+    }
+  };
 
   const handleAISearch = async () => {
     if (!query) return;
@@ -215,14 +230,20 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.label}>Cover URL</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.coverUrl}
-                  onChangeText={(text) => setFormData({ ...formData, coverUrl: text })}
-                  placeholder="https://..."
-                  placeholderTextColor="#a8a29e"
-                />
+                <Text style={styles.label}>Cover Image</Text>
+                <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
+                  {formData.coverUrl ? (
+                    <Image source={{ uri: formData.coverUrl }} style={styles.coverPreview} />
+                  ) : (
+                    <View style={styles.placeholderCover}>
+                      <Camera size={24} color="#a8a29e" />
+                      <Text style={styles.placeholderText}>Tap to add cover</Text>
+                    </View>
+                  )}
+                  <View style={styles.editBadge}>
+                    <Pencil size={12} color="#fff" />
+                  </View>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.field}>
@@ -381,6 +402,43 @@ const styles = StyleSheet.create({
   submitText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  imagePicker: {
+    height: 200,
+    backgroundColor: '#f5f5f4',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  coverPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  placeholderCover: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  placeholderText: {
+    color: '#a8a29e',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: '#5D4037',
+    padding: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });
 

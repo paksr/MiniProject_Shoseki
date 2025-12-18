@@ -7,9 +7,10 @@ import {
     TouchableOpacity,
     ScrollView,
     StyleSheet,
-    Dimensions
+    Dimensions,
+    Alert
 } from 'react-native';
-import { X, BookOpen, MapPin, Hash, Layers, ShoppingBag, Pencil } from 'lucide-react-native';
+import { X, BookOpen, MapPin, Hash, Layers, ShoppingBag, Pencil, Trash2 } from 'lucide-react-native';
 import { Book, BookStatus } from '../types';
 import Button from './Button';
 
@@ -19,6 +20,7 @@ interface BookDetailsModalProps {
     isAdmin: boolean;
     onAddToCart?: (book: Book) => void;
     onEdit?: (book: Book) => void;
+    onDelete?: (id: string) => void;
     isInCart?: boolean;
 }
 
@@ -26,9 +28,24 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1524578271613-d550eacf6090?q=80&w=600&auto=format&fit=crop";
 
 const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
-    book, onClose, isAdmin, onAddToCart, onEdit, isInCart
+    book, onClose, isAdmin, onAddToCart, onEdit, onDelete, isInCart
 }) => {
     const [imgError, setImgError] = useState(false);
+
+    const handleDelete = () => {
+        Alert.alert(
+            "Delete Book",
+            "Are you sure you want to delete this book? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => onDelete && onDelete(book.id)
+                }
+            ]
+        );
+    };
 
     const getStatusStyle = () => {
         switch (book.status) {
@@ -141,13 +158,22 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                     {/* Footer */}
                     <View style={styles.footer}>
                         {isAdmin ? (
-                            <Button
-                                onPress={() => { onClose(); onEdit && onEdit(book); }}
-                                style={styles.footerButton}
-                            >
-                                <Pencil size={18} color="#fff" />
-                                <Text style={styles.footerButtonText}>Edit Book</Text>
-                            </Button>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <Button
+                                    variant="ghost"
+                                    onPress={handleDelete}
+                                    style={styles.deleteButton}
+                                >
+                                    <Trash2 size={20} color="#ef4444" />
+                                </Button>
+                                <Button
+                                    onPress={() => { onClose(); onEdit && onEdit(book); }}
+                                    style={{ flex: 1, flexDirection: 'row', gap: 8 }}
+                                >
+                                    <Pencil size={18} color="#fff" />
+                                    <Text style={styles.footerButtonText}>Edit Book</Text>
+                                </Button>
+                            </View>
                         ) : (
                             <>
                                 {book.status === BookStatus.Available ? (
@@ -356,6 +382,14 @@ const styles = StyleSheet.create({
     },
     footerButtonTextDisabled: {
         color: '#a8a29e',
+    },
+    deleteButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 16,
+        backgroundColor: '#fee2e2',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });
 

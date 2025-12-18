@@ -31,7 +31,10 @@ export const DiscoverScreen = ({
     );
 
     if (activeCategory) {
-        const categoryBooks = searchedBooks.filter(b => b.genre === activeCategory);
+        const categoryBooks = activeCategory === 'New Arrivals'
+            ? searchedBooks
+            : searchedBooks.filter(b => b.genre === activeCategory);
+
         return (
             <View style={styles.container}>
                 <View style={styles.categoryHeader}>
@@ -81,7 +84,12 @@ export const DiscoverScreen = ({
 
             {!search && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>New Arrivals</Text>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>New Arrivals</Text>
+                        <TouchableOpacity onPress={() => setActiveCategory('New Arrivals')}>
+                            <Text style={styles.seeAll}>See All</Text>
+                        </TouchableOpacity>
+                    </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {books.slice(0, 6).map(book => (
                             <BookCard

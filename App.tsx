@@ -92,6 +92,12 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
         setEditBook(null);
     };
 
+    const handleDeleteBook = async (bookId: string) => {
+        await deleteBook(bookId);
+        loadBooks();
+        setSelectedBook(null);
+    };
+
     if (loading) {
         return <View style={styles.center}><ActivityIndicator size="large" color="#5D4037" /></View>;
     }
@@ -136,6 +142,7 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
                     book={selectedBook} onClose={() => setSelectedBook(null)}
                     isAdmin={isAdmin} onAddToCart={handleAddToCart}
                     onEdit={setEditBook} isInCart={cart.some(c => c.id === selectedBook.id)}
+                    onDelete={handleDeleteBook}
                 />
             )}
 
