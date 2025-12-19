@@ -321,6 +321,29 @@ export const updateBookDetails = async (book: Book): Promise<void> => {
 };
 
 export const deleteBook = async (id: string): Promise<void> => {
+    // 1. Delete associated loans
+    const { error: loanError } = await supabase
+        .from('loans')
+        .delete()
+        .eq('book_id', id);
+
+    if (loanError) {
+        console.error('Error deleting associated loans:', loanError.message);
+        throw new Error("Failed to clean up book loans");
+    }
+
+    // 2. Delete associated reservations
+    const { error: resError } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('book_id', id);
+
+    if (resError) {
+        console.error('Error deleting associated reservations:', resError.message);
+        throw new Error("Failed to clean up book reservations");
+    }
+
+    // 3. Delete the book
     const { error } = await supabase
         .from('books')
         .delete()

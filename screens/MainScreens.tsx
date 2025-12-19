@@ -84,40 +84,40 @@ export const DiscoverScreen = ({
                 </View>
             )}
 
-            {!search && (
+            {/* Search Results / Genres */}
+            {search ? (
                 <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>New Arrivals</Text>
-                        <TouchableOpacity onPress={() => setActiveCategory('New Arrivals')}>
-                            <Text style={styles.seeAll}>See All</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {books.slice(0, 6).map(book => (
-                            <BookCard
-                                key={book.id} book={book} onClick={onBookClick} onEdit={onEdit}
-                                onAddToCart={onAddToCart} isAdmin={isAdmin}
-                                isInCart={cartItems.some(c => c.id === book.id)}
-                                onStatusChange={() => { }} onDelete={() => { }} variant="portrait"
-                            />
-                        ))}
-                    </ScrollView>
+                    <Text style={styles.sectionTitle}>Search Results ({searchedBooks.length})</Text>
+                    {searchedBooks.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <Text style={styles.emptyText}>No books found matching "{search}"</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.gridContainer}>
+                            {searchedBooks.map(book => (
+                                <View key={book.id} style={styles.gridItem}>
+                                    <BookCard
+                                        book={book} onClick={onBookClick} onEdit={onEdit}
+                                        onAddToCart={onAddToCart} isAdmin={isAdmin}
+                                        isInCart={cartItems.some(c => c.id === book.id)}
+                                        onStatusChange={() => { }} onDelete={() => { }} variant="portrait"
+                                    />
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
-            )}
-
-            {genres.map(genre => {
-                const genreBooks = searchedBooks.filter(b => b.genre === genre);
-                if (genreBooks.length === 0) return null;
-                return (
-                    <View key={genre} style={styles.section}>
+            ) : (
+                <>
+                    <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>{genre}</Text>
-                            <TouchableOpacity onPress={() => setActiveCategory(genre)}>
+                            <Text style={styles.sectionTitle}>New Arrivals</Text>
+                            <TouchableOpacity onPress={() => setActiveCategory('New Arrivals')}>
                                 <Text style={styles.seeAll}>See All</Text>
                             </TouchableOpacity>
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {genreBooks.slice(0, 6).map(book => (
+                            {books.slice(0, 6).map(book => (
                                 <BookCard
                                     key={book.id} book={book} onClick={onBookClick} onEdit={onEdit}
                                     onAddToCart={onAddToCart} isAdmin={isAdmin}
@@ -127,8 +127,33 @@ export const DiscoverScreen = ({
                             ))}
                         </ScrollView>
                     </View>
-                );
-            })}
+
+                    {genres.map(genre => {
+                        const genreBooks = searchedBooks.filter(b => b.genre === genre);
+                        if (genreBooks.length === 0) return null;
+                        return (
+                            <View key={genre} style={styles.section}>
+                                <View style={styles.sectionHeader}>
+                                    <Text style={styles.sectionTitle}>{genre}</Text>
+                                    <TouchableOpacity onPress={() => setActiveCategory(genre)}>
+                                        <Text style={styles.seeAll}>See All</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    {genreBooks.slice(0, 6).map(book => (
+                                        <BookCard
+                                            key={book.id} book={book} onClick={onBookClick} onEdit={onEdit}
+                                            onAddToCart={onAddToCart} isAdmin={isAdmin}
+                                            isInCart={cartItems.some(c => c.id === book.id)}
+                                            onStatusChange={() => { }} onDelete={() => { }} variant="portrait"
+                                        />
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        );
+                    })}
+                </>
+            )}
             <View style={{ height: 100 }} />
         </ScrollView>
     );
@@ -440,4 +465,6 @@ const styles = StyleSheet.create({
     reservationTitle: { fontSize: 14, fontWeight: '700', color: '#1c1917', marginBottom: 2 },
     reservationDate: { fontSize: 12, color: '#92400e' },
     cancelButton: { padding: 8, backgroundColor: '#fee2e2', borderRadius: 20 },
+    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    gridItem: { width: '48%' },
 });

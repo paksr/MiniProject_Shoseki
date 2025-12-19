@@ -55,7 +55,7 @@ CREATE POLICY "Enable delete access for all users" ON public.books FOR DELETE US
 CREATE TABLE IF NOT EXISTS public.loans (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id),
-  book_id UUID REFERENCES public.books(id),
+  book_id UUID REFERENCES public.books(id) ON DELETE CASCADE,
   book_title TEXT,
   cover_url TEXT,
   borrowed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -74,7 +74,7 @@ CREATE POLICY "Enable all access for loans" ON public.loans FOR ALL USING (true)
 CREATE TABLE IF NOT EXISTS public.reservations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id),
-  book_id UUID REFERENCES public.books(id),
+  book_id UUID REFERENCES public.books(id) ON DELETE CASCADE,
   book_title TEXT,
   book_author TEXT,
   cover_url TEXT,
