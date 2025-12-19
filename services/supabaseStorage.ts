@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { User, Book, BookStatus, LoanRecord, Reservation, Booking, BookingStatus } from '../types';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 
 const ACTIVE_USER_KEY = 'shoseki_active_user';
 
@@ -9,7 +11,15 @@ const ACTIVE_USER_KEY = 'shoseki_active_user';
 export const getActiveUser = async (): Promise<User | null> => {
     try {
         const stored = await AsyncStorage.getItem(ACTIVE_USER_KEY);
-        return stored ? JSON.parse(stored) : null;
+        if (!stored) return null;
+
+        const user = JSON.parse(stored);
+        // Sanitize legacy invalid UUIDs
+        if (user.id === 'admin-master') {
+            user.id = '00000000-0000-0000-0000-000000000000';
+            await AsyncStorage.setItem(ACTIVE_USER_KEY, JSON.stringify(user));
+        }
+        return user;
     } catch {
         return null;
     }
@@ -257,7 +267,70 @@ export const getBooks = async (): Promise<Book[]> => {
     }
 };
 
+// Helper to upload image to Supabase Storage
+const uploadImage = async (uri: string): Promise<string> => {
+    try {
+        if (!uri.startsWith('file://')) {
+            return uri; // Already a remote URL
+        }
+
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+        });
+
+        const fileExt = uri.split('.').pop() || 'jpg';
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        const contentType = `image/${fileExt}`;
+
+        const { error } = await supabase.storage
+            .from('book-covers')
+            .upload(filePath, decode(base64), {
+                contentType,
+            });
+
+        if (error) {
+            // If bucket not found, try to create it (best effort for dev environments)
+            if (error.message.includes('Bucket not found') || (error as any).error === 'Bucket not found') {
+                console.log("Bucket not found, attempting to create 'book-covers'...");
+                const { data: bucketData, error: createError } = await supabase.storage.createBucket('book-covers', {
+                    public: true
+                });
+
+                if (createError) {
+                    console.error("Failed to create bucket:", createError);
+                    // Fall through to throw original error or custom one
+                    throw new Error("Supabase Storage bucket 'book-covers' does not exist. Please create it in your Supabase Dashboard as a PUBLIC bucket.");
+                }
+
+                // Retry upload
+                const { error: retryError } = await supabase.storage
+                    .from('book-covers')
+                    .upload(filePath, decode(base64), {
+                        contentType,
+                    });
+
+                if (retryError) {
+                    console.error("Retry upload failed:", retryError);
+                    throw retryError;
+                }
+            } else {
+                console.error('Error uploading image:', error);
+                throw error;
+            }
+        }
+
+        const { data } = supabase.storage.from('book-covers').getPublicUrl(filePath);
+        return data.publicUrl;
+    } catch (error) {
+        console.error("Upload failed:", error);
+        return uri; // Fallback to local URI if upload fails
+    }
+};
+
 export const addBook = async (book: Omit<Book, 'id' | 'addedAt'>): Promise<Book> => {
+    const publicCoverUrl = await uploadImage(book.coverUrl);
+
     const { data, error } = await supabase
         .from('books')
         .insert({
@@ -267,7 +340,7 @@ export const addBook = async (book: Omit<Book, 'id' | 'addedAt'>): Promise<Book>
             genre: book.genre,
             pages: book.pages,
             location: book.location,
-            cover_url: book.coverUrl,
+            cover_url: publicCoverUrl,
             description: book.description,
             status: book.status || 'Available',
             rating: book.rating || 4,
@@ -298,6 +371,8 @@ export const addBook = async (book: Omit<Book, 'id' | 'addedAt'>): Promise<Book>
 };
 
 export const updateBookDetails = async (book: Book): Promise<void> => {
+    const publicCoverUrl = await uploadImage(book.coverUrl);
+
     const { error } = await supabase
         .from('books')
         .update({
@@ -307,7 +382,7 @@ export const updateBookDetails = async (book: Book): Promise<void> => {
             genre: book.genre,
             pages: book.pages,
             location: book.location,
-            cover_url: book.coverUrl,
+            cover_url: publicCoverUrl,
             description: book.description,
             status: book.status,
             rating: book.rating
