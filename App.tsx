@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, TouchableOpacity, Text, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -92,6 +92,7 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
 
     const handleCheckout = async () => {
         await borrowBooks(user.id, cart.map(c => c.id));
+        Alert.alert('Success', 'Books borrowed successfully!');
         setCart([]);
         setShowCart(false);
         loadBooks();

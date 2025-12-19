@@ -191,7 +191,8 @@ export const updateUserDetails = async (userId: string, updates: Partial<User>):
 
 // Helper to seed books if empty
 const seedBooksToSupabase = async () => {
-    const statuses = [BookStatus.Available, BookStatus.OnLoan, BookStatus.OutOfStock];
+    // Removed BookStatus.OutOfStock from generation
+    const statuses = [BookStatus.Available, BookStatus.OnLoan];
     const genres = ['Fiction', 'Mystery', 'Sci-Fi', 'Romance', 'History', 'Non-Fiction', 'Horror'];
     const books = [];
 
@@ -203,7 +204,7 @@ const seedBooksToSupabase = async () => {
             description: `This is a generated description for Book ${i}. It creates a cozy atmosphere for reading.`,
             genre: genres[Math.floor(Math.random() * genres.length)],
             pages: Math.floor(Math.random() * 300) + 100,
-            status: statuses[i % 3],
+            status: statuses[i % 2], // Only 2 statuses now
             rating: Math.floor(Math.random() * 5) + 1,
             location: `Shelf ${String.fromCharCode(65 + Math.floor(Math.random() * 6))}-${Math.floor(Math.random() * 12) + 1}`
         });
@@ -243,7 +244,8 @@ export const getBooks = async (): Promise<Book[]> => {
             description: row.description,
             genre: row.genre,
             pages: row.pages,
-            status: row.status as BookStatus,
+            // Override OutOfStock to Available
+            status: (row.status === BookStatus.OutOfStock ? BookStatus.Available : row.status) as BookStatus,
             addedAt: row.added_at,
             rating: row.rating,
             location: row.location,
@@ -364,8 +366,8 @@ export const borrowBooks = async (userId: string, bookIds: string[]): Promise<vo
     if (!books) return;
 
     for (const book of books) {
-        // Double check status
-        if (book.status !== BookStatus.Available) continue;
+        // Double check status - allow both Available and OutOfStock (which is treated as Available)
+        if (book.status !== BookStatus.Available && book.status !== BookStatus.OutOfStock) continue;
 
         // 2. Create Loan Record
         const dueDate = new Date();

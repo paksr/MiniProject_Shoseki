@@ -10,9 +10,10 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Book, BookStatus, User, LoanRecord, Booking, Penalty, Reservation } from '../types';
 import { getBookings, getPenalties } from '../services/storage';
-import { updateUserDetails, getLoans, getReservations, cancelReservation } from '../services/supabaseStorage';
+import { updateUserDetails, getLoans, getReservations, cancelReservation, returnBook } from '../services/supabaseStorage';
 import BookCard from '../components/BookCard';
 import Button from '../components/Button';
+import BookDetailsModal from '../components/BookDetailsModal';
 
 // --- Discover Screen ---
 export const DiscoverScreen = ({
@@ -146,6 +147,7 @@ export const AccountScreen = ({
     const [loading, setLoading] = useState(true);
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(user.name);
+    const [selectedBook, setSelectedBook] = useState<Book | null>(null);
 
     useEffect(() => {
         setNewName(user.name);
@@ -178,6 +180,17 @@ export const AccountScreen = ({
                 }
             }
         ]);
+    };
+
+    const handleReturnBook = async (book: Book) => {
+        try {
+            await returnBook(book.id);
+            Alert.alert("Success", "Book returned successfully!");
+            setSelectedBook(null);
+            loadData();
+        } catch (error) {
+            Alert.alert("Error", "Failed to return book.");
+        }
     };
 
     const pickImage = async () => {
@@ -316,13 +329,20 @@ export const AccountScreen = ({
                         </View>
                     ) : (
                         activeLoans.map(loan => (
-                            <View key={loan.id} style={styles.loanCard}>
+                            <TouchableOpacity
+                                key={loan.id}
+                                style={styles.loanCard}
+                                onPress={() => {
+                                    const book = books.find(b => b.id === loan.bookId);
+                                    if (book) setSelectedBook(book);
+                                }}
+                            >
                                 <Image source={{ uri: loan.coverUrl }} style={styles.loanImage} />
                                 <View style={styles.loanInfo}>
                                     <Text style={styles.loanTitle} numberOfLines={1}>{loan.bookTitle}</Text>
                                     <Text style={styles.loanDue}>Due: {new Date(loan.dueDate).toLocaleDateString()}</Text>
                                 </View>
-                            </View>
+                            </TouchableOpacity>
                         ))
                     )}
 
@@ -353,6 +373,15 @@ export const AccountScreen = ({
                 </>
             )}
             <View style={{ height: 100 }} />
+
+            {selectedBook && (
+                <BookDetailsModal
+                    book={selectedBook}
+                    onClose={() => setSelectedBook(null)}
+                    isAdmin={false}
+                    onReturn={handleReturnBook}
+                />
+            )}
         </ScrollView>
     );
 };

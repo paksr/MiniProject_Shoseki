@@ -22,6 +22,7 @@ interface BookDetailsModalProps {
     onReserve?: (book: Book) => void;
     onEdit?: (book: Book) => void;
     onDelete?: (id: string) => void;
+    onReturn?: (book: Book) => void;
     isInCart?: boolean;
     isReserved?: boolean;
 }
@@ -30,7 +31,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1524578271613-d550eacf6090?q=80&w=600&auto=format&fit=crop";
 
 const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
-    book, onClose, isAdmin, onAddToCart, onReserve, onEdit, onDelete, isInCart, isReserved
+    book, onClose, isAdmin, onAddToCart, onReserve, onEdit, onDelete, onReturn, isInCart, isReserved
 }) => {
     const [imgError, setImgError] = useState(false);
 
@@ -178,32 +179,44 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                             </View>
                         ) : (
                             <>
-                                {book.status === BookStatus.Available ? (
+                                {onReturn ? (
                                     <Button
-                                        onPress={() => { onAddToCart && onAddToCart(book); onClose(); }}
-                                        disabled={isInCart}
-                                        style={[styles.footerButton, isInCart && styles.footerButtonDisabled]}
+                                        onPress={() => { onReturn(book); onClose(); }}
+                                        style={styles.footerButton}
                                     >
-                                        <ShoppingBag size={18} color={isInCart ? '#a8a29e' : '#fff'} />
-                                        <Text style={[styles.footerButtonText, isInCart && styles.footerButtonTextDisabled]}>
-                                            {isInCart ? 'In Cart' : 'Borrow Book'}
-                                        </Text>
-                                    </Button>
-                                ) : book.status === BookStatus.OnLoan ? (
-                                    <Button
-                                        onPress={() => { onReserve && onReserve(book); onClose(); }}
-                                        disabled={isReserved}
-                                        style={[styles.footerButton, styles.reserveButton, isReserved && styles.footerButtonDisabled]}
-                                    >
-                                        <Clock size={18} color={isReserved ? '#a8a29e' : '#fff'} />
-                                        <Text style={[styles.footerButtonText, isReserved && styles.footerButtonTextDisabled]}>
-                                            {isReserved ? 'Already Reserved' : 'Reserve Book'}
-                                        </Text>
+                                        <BookOpen size={18} color="#fff" />
+                                        <Text style={styles.footerButtonText}>Return Book</Text>
                                     </Button>
                                 ) : (
-                                    <View style={[styles.footerButton, styles.footerButtonDisabled]}>
-                                        <Text style={styles.footerButtonTextDisabled}>Not Available</Text>
-                                    </View>
+                                    <>
+                                        {book.status === BookStatus.Available ? (
+                                            <Button
+                                                onPress={() => { onAddToCart && onAddToCart(book); onClose(); }}
+                                                disabled={isInCart}
+                                                style={[styles.footerButton, isInCart && styles.footerButtonDisabled]}
+                                            >
+                                                <ShoppingBag size={18} color={isInCart ? '#a8a29e' : '#fff'} />
+                                                <Text style={[styles.footerButtonText, isInCart && styles.footerButtonTextDisabled]}>
+                                                    {isInCart ? 'In Cart' : 'Borrow Book'}
+                                                </Text>
+                                            </Button>
+                                        ) : book.status === BookStatus.OnLoan ? (
+                                            <Button
+                                                onPress={() => { onReserve && onReserve(book); onClose(); }}
+                                                disabled={isReserved}
+                                                style={[styles.footerButton, styles.reserveButton, isReserved && styles.footerButtonDisabled]}
+                                            >
+                                                <Clock size={18} color={isReserved ? '#a8a29e' : '#fff'} />
+                                                <Text style={[styles.footerButtonText, isReserved && styles.footerButtonTextDisabled]}>
+                                                    {isReserved ? 'Already Reserved' : 'Reserve Book'}
+                                                </Text>
+                                            </Button>
+                                        ) : (
+                                            <View style={[styles.footerButton, styles.footerButtonDisabled]}>
+                                                <Text style={styles.footerButtonTextDisabled}>Not Available</Text>
+                                            </View>
+                                        )}
+                                    </>
                                 )}
                             </>
                         )}
