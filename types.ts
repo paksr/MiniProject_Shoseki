@@ -33,6 +33,19 @@ export interface Book {
   isbn?: string; // Added ISBN
 }
 
+export interface Rating {
+  id: string;
+  userId: string;
+  bookId: string;
+  rating: number;
+  comment?: string; // Added comment
+  createdAt: string;
+  user?: {
+    name: string;
+    avatarUrl?: string;
+  };
+}
+
 export interface ReadingStat {
   month: string;
   booksRead: number;

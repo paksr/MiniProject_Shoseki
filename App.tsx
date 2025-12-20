@@ -167,7 +167,7 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
             {selectedBook && (
                 <BookDetailsModal
                     book={selectedBook} onClose={() => setSelectedBook(null)}
-                    isAdmin={isAdmin} onAddToCart={handleAddToCart}
+                    isAdmin={isAdmin} currentUserId={user.id} onAddToCart={handleAddToCart}
                     onReserve={handleReserve}
                     onEdit={setEditBook} isInCart={cart.some(c => c.id === selectedBook.id)}
                     isReserved={reservations.some(r => r.bookId === selectedBook.id)}

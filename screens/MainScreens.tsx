@@ -404,6 +404,7 @@ export const AccountScreen = ({
                     book={selectedBook}
                     onClose={() => setSelectedBook(null)}
                     isAdmin={false}
+                    currentUserId={user.id}
                     onReturn={handleReturnBook}
                 />
             )}

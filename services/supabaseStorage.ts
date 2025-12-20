@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { User, Book, BookStatus, LoanRecord, Reservation, Booking, BookingStatus } from '../types';
+import { User, Book, BookStatus, LoanRecord, Reservation, Booking, BookingStatus, Rating } from '../types';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 
@@ -215,7 +215,7 @@ const seedBooksToSupabase = async () => {
             genre: genres[Math.floor(Math.random() * genres.length)],
             pages: Math.floor(Math.random() * 300) + 100,
             status: statuses[i % 2], // Only 2 statuses now
-            rating: Math.floor(Math.random() * 5) + 1,
+            rating: 0, // Default to 0 stars as requested
             location: `Shelf ${String.fromCharCode(65 + Math.floor(Math.random() * 6))}-${Math.floor(Math.random() * 12) + 1}`
         });
     }
@@ -343,7 +343,7 @@ export const addBook = async (book: Omit<Book, 'id' | 'addedAt'>): Promise<Book>
             cover_url: publicCoverUrl,
             description: book.description,
             status: book.status || 'Available',
-            rating: book.rating || 4,
+            rating: book.rating ?? 0, // Default to 0
             // added_at is handled by default gen_random_uuid
         })
         .select()
@@ -615,4 +615,85 @@ export const cancelBooking = async (id: string): Promise<void> => {
 
 export const updateBookingStatus = async (id: string, status: BookingStatus): Promise<void> => {
     await supabase.from('bookings').update({ status: status }).eq('id', id);
+};
+
+// --- Ratings with Supabase ---
+
+export const getRatings = async (bookId: string): Promise<Rating[]> => {
+    const { data, error } = await supabase
+        .from('ratings')
+        .select('*, users(name, avatar_url)')
+        .eq('book_id', bookId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        // If table doesn't exist, just return empty list to avoid spamming logs/UI
+        if (error.message.includes('relation "public.ratings" does not exist') ||
+            error.message.includes('Could not find the table') ||
+            error.code === '42P01') {
+            console.log('Ratings table missing (or schema cache stale), returning empty list.');
+            return [];
+        }
+        console.error('Error fetching ratings:', error.message);
+        return [];
+    }
+
+    return (data || []).map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        bookId: row.book_id,
+        rating: row.rating,
+        comment: row.comment, // Map comment
+        createdAt: row.created_at,
+        user: row.users ? {
+            name: row.users.name,
+            avatarUrl: row.users.avatar_url
+        } : undefined
+    }));
+};
+
+export const addRating = async (userId: string, bookId: string, rating: number, comment?: string): Promise<void> => {
+    const { error } = await supabase.from('ratings').insert({
+        user_id: userId,
+        book_id: bookId,
+        rating: rating,
+        comment: comment // Insert comment
+    });
+
+    if (error) {
+        if (error.message.includes('relation "public.ratings" does not exist') ||
+            error.message.includes('Could not find the table') ||
+            error.code === '42P01') {
+            throw new Error("Ratings unavailable: Database table missing. Please run the setup SQL.");
+        }
+        throw new Error(error.message);
+    }
+
+    try {
+        await updateBookRating(bookId);
+    } catch (e) {
+        console.warn("Failed to update aggregated book rating:", e);
+    }
+};
+
+export const deleteRating = async (ratingId: string, bookId: string): Promise<void> => {
+    const { error } = await supabase.from('ratings').delete().eq('id', ratingId);
+    if (error) throw new Error(error.message);
+
+    await updateBookRating(bookId);
+};
+
+const updateBookRating = async (bookId: string) => {
+    // Recalculate average
+    const { data, error } = await supabase
+        .from('ratings')
+        .select('rating')
+        .eq('book_id', bookId);
+
+    if (error || !data) return;
+
+    const total = data.reduce((acc, curr) => acc + curr.rating, 0);
+    const avg = data.length > 0 ? Math.round(total / data.length) : 0;
+
+    await supabase.from('books').update({ rating: avg }).eq('id', bookId);
 };

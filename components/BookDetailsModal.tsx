@@ -8,16 +8,19 @@ import {
     ScrollView,
     StyleSheet,
     Dimensions,
-    Alert
+    Alert,
+    TextInput
 } from 'react-native';
 import { X, BookOpen, MapPin, Hash, Layers, ShoppingBag, Pencil, Trash2, Clock } from 'lucide-react-native';
-import { Book, BookStatus } from '../types';
+import { Book, BookStatus, Rating } from '../types';
 import Button from './Button';
+import { getRatings, addRating, deleteRating } from '../services/supabaseStorage';
 
 interface BookDetailsModalProps {
     book: Book;
     onClose: () => void;
     isAdmin: boolean;
+    currentUserId?: string; // Added user ID for rating
     onAddToCart?: (book: Book) => void;
     onReserve?: (book: Book) => void;
     onEdit?: (book: Book) => void;
@@ -31,9 +34,52 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLACEHOLDER_IMAGE = "https://images.unsplash.com/photo-1524578271613-d550eacf6090?q=80&w=600&auto=format&fit=crop";
 
 const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
-    book, onClose, isAdmin, onAddToCart, onReserve, onEdit, onDelete, onReturn, isInCart, isReserved
+    book: initialBook, onClose, isAdmin, currentUserId, onAddToCart, onReserve, onEdit, onDelete, onReturn, isInCart, isReserved
 }) => {
+    const [book, setBook] = useState(initialBook); // Local state to update rating immediately
     const [imgError, setImgError] = useState(false);
+    const [ratings, setRatings] = useState<Rating[]>([]);
+    const [userRating, setUserRating] = useState(0);
+    const [tempRating, setTempRating] = useState(0); // For star selection
+    const [comment, setComment] = useState("");
+
+    React.useEffect(() => {
+        loadRatings();
+    }, [book.id]);
+
+    const loadRatings = async () => {
+        const data = await getRatings(book.id);
+        setRatings(data);
+    };
+
+    const handleSubmitRating = async () => {
+        if (!currentUserId || tempRating === 0) {
+            Alert.alert("Rate First", "Please select a star rating.");
+            return;
+        }
+
+        setUserRating(tempRating); // Optimistic update UI
+        try {
+            await addRating(currentUserId, book.id, tempRating, comment);
+            await loadRatings(); // Refresh list
+            setComment(""); // Clear comment
+            setTempRating(0); // Reset temp
+
+            Alert.alert("Success", "Rating submitted!");
+        } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to submit rating.");
+        }
+    };
+
+    const handleDeleteRating = async (ratingId: string) => {
+        try {
+            await deleteRating(ratingId, book.id);
+            await loadRatings(); // Refresh list
+            Alert.alert("Success", "Rating deleted.");
+        } catch (error) {
+            Alert.alert("Error", "Failed to delete rating.");
+        }
+    };
 
     const handleDelete = () => {
         Alert.alert(
@@ -151,8 +197,83 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
                                 </View>
                             </View>
                             <Text style={styles.ratingValue}>
-                                {book.rating || 0}<Text style={styles.ratingMax}>/5</Text>
+                                {Number(book.rating || 0).toFixed(1)}<Text style={styles.ratingMax}>/5</Text>
                             </Text>
+                        </View>
+
+                        {/* Interactive Rating Section */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>User Ratings</Text>
+
+                            {/* Rate This Book */}
+                            {!isAdmin && currentUserId && !ratings.find(r => r.userId === currentUserId) && (
+                                <View style={styles.addRatingContainer}>
+                                    <Text style={styles.addRatingTitle}>Rate this book</Text>
+                                    <View style={styles.interactiveStars}>
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                            <TouchableOpacity key={star} onPress={() => setTempRating(star)}>
+                                                <Text style={[
+                                                    styles.interactiveStar,
+                                                    star <= tempRating ? styles.starFilled : styles.starEmpty
+                                                ]}>★</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                    <TextInput
+                                        style={styles.commentInput}
+                                        placeholder="Write a review (optional)..."
+                                        value={comment}
+                                        onChangeText={setComment}
+                                        multiline
+                                    />
+                                    <Button
+                                        onPress={handleSubmitRating}
+                                        style={styles.submitRatingButton}
+                                        disabled={tempRating === 0}
+                                    >
+                                        <Text style={styles.submitRatingText}>Submit Review</Text>
+                                    </Button>
+                                </View>
+                            )}
+
+                            {/* Ratings List */}
+                            {ratings.length === 0 ? (
+                                <Text style={styles.noRatingsText}>No ratings yet. Be the first!</Text>
+                            ) : (
+                                ratings.map(rating => (
+                                    <View key={rating.id} style={styles.ratingItem}>
+                                        <View style={styles.ratingUserRow}>
+                                            <Image
+                                                source={{ uri: rating.user?.avatarUrl || `https://ui-avatars.com/api/?name=${rating.user?.name || 'User'}` }}
+                                                style={styles.ratingAvatar}
+                                            />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.ratingUserName}>{rating.user?.name || 'Unknown User'}</Text>
+                                                <View style={styles.ratingStarsRow}>
+                                                    {[1, 2, 3, 4, 5].map(star => (
+                                                        <Text key={star} style={[
+                                                            styles.smallStar,
+                                                            star <= rating.rating ? styles.starFilled : styles.starEmpty
+                                                        ]}>★</Text>
+                                                    ))}
+                                                </View>
+                                                {rating.comment && (
+                                                    <Text style={styles.ratingComment}>{rating.comment}</Text>
+                                                )}
+                                            </View>
+                                            {/* Staff Delete Button */}
+                                            {isAdmin && (
+                                                <TouchableOpacity
+                                                    onPress={() => handleDeleteRating(rating.id)}
+                                                    style={styles.deleteRatingButton}
+                                                >
+                                                    <Trash2 size={16} color="#ef4444" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                ))
+                            )}
                         </View>
 
                         <View style={{ height: 20 }} />
@@ -419,6 +540,94 @@ const styles = StyleSheet.create({
     },
     reserveButton: {
         backgroundColor: '#f59e0b',
+    },
+    addRatingContainer: {
+        backgroundColor: '#fafaf9',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 16,
+        alignItems: 'center',
+    },
+    addRatingTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#57534e',
+        marginBottom: 8,
+    },
+    interactiveStars: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    interactiveStar: {
+        fontSize: 24,
+    },
+    commentInput: {
+        marginTop: 12,
+        width: '100%',
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        borderWidth: 1,
+        borderColor: '#e7e5e4',
+        minHeight: 60,
+    },
+    submitRatingButton: {
+        marginTop: 12,
+        backgroundColor: '#5D4037',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        alignSelf: 'flex-end',
+    },
+    submitRatingText: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    noRatingsText: {
+        color: '#a8a29e',
+        fontStyle: 'italic',
+        textAlign: 'center',
+        marginTop: 8,
+    },
+    ratingItem: {
+        marginBottom: 12,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f5f5f4',
+    },
+    ratingUserRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    ratingAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#e7e5e4',
+    },
+    ratingUserName: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#1c1917',
+    },
+    ratingStarsRow: {
+        flexDirection: 'row',
+        gap: 2,
+    },
+    smallStar: {
+        fontSize: 12,
+    },
+    ratingComment: {
+        marginTop: 4,
+        fontSize: 13,
+        color: '#44403c',
+        lineHeight: 18,
+    },
+    deleteRatingButton: {
+        padding: 8,
     },
 });
 

@@ -98,7 +98,8 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
     } else {
       onAdd({
         ...formData,
-        status: BookStatus.Available
+        status: BookStatus.Available,
+        rating: 0
       });
     }
     onClose();

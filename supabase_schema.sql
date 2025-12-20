@@ -105,3 +105,22 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable all access for bookings" ON public.bookings;
 CREATE POLICY "Enable all access for bookings" ON public.bookings FOR ALL USING (true);
+
+-- ==========================================
+-- 6. RATINGS TABLE (NEW)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.ratings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.users(id),
+  book_id UUID REFERENCES public.books(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, book_id)
+);
+
+ALTER TABLE public.ratings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Enable all access for ratings" ON public.ratings;
+CREATE POLICY "Enable all access for ratings" ON public.ratings FOR ALL USING (true);
+
+-- Update books table default rating to 0 (Note: checks need to be removed/modified if any exist on rating column)
+ALTER TABLE public.books ALTER COLUMN rating SET DEFAULT 0;
