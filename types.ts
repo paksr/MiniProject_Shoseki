@@ -74,6 +74,7 @@ export interface Booking {
   status: BookingStatus;
   capacity?: number;
   userEmail?: string; // Added for Admin display
+  userName?: string; // Added for Admin display
 }
 
 export interface Penalty {
@@ -94,6 +95,7 @@ export interface Reservation {
   coverUrl: string;
   reservedAt: string;
   status: 'active' | 'fulfilled' | 'cancelled';
+  userName?: string; // Added for Admin display
 }
 
 export interface LoanRecord {
@@ -106,4 +108,5 @@ export interface LoanRecord {
   dueDate: string;
   returnedAt?: string;
   status: 'active' | 'returned' | 'overdue';
+  userName?: string; // Added for Admin display
 }

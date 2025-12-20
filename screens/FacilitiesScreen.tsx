@@ -222,7 +222,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                             <Text style={styles.bookingName}>{booking.facilityName}</Text>
                             <Text style={styles.paxTag}>{booking.pax} PAX</Text>
                         </View>
-                        <Text style={styles.adminUserText}>User: {booking.userEmail || booking.userId}</Text>
+                        <Text style={styles.adminUserText}>User: {booking.userName || booking.userEmail || booking.userId}</Text>
                         <Text style={styles.bookingDetails}>{formatDateTime(booking.date, booking.startTime)} - {booking.endTime}</Text>
 
                         <View style={styles.adminActions}>
@@ -250,7 +250,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                         <View style={styles.bookingInfo}>
                             <Text style={styles.bookingName}>{booking.facilityName}</Text>
                             <Text style={styles.bookingDetails}>{formatDateTime(booking.date, booking.startTime)} - {booking.endTime}</Text>
-                            <Text style={[styles.bookingDetails, { marginTop: 2 }]}>User: {booking.userEmail || booking.userId}</Text>
+                            <Text style={[styles.bookingDetails, { marginTop: 2 }]}>User: {booking.userName || booking.userEmail || booking.userId}</Text>
                         </View>
                         <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
                             <Text style={[styles.statusText, { color: statusStyle.text }]}>{booking.status.toUpperCase()}</Text>

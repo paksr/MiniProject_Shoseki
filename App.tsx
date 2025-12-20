@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Library, Search, CalendarDays, User as UserIcon } from 'lucide-react-native';
 
 
-import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation, getPenalties } from './services/supabaseStorage';
+import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation, getPenalties, getLoans } from './services/supabaseStorage';
 // import { borrowBooks, reserveBook, getReservations, cancelReservation } from './services/storage'; // Removed local storage
 import { User, Book, BookStatus, Reservation } from './types';
 import LoginScreen from './screens/LoginScreen';
@@ -124,6 +124,15 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
     };
 
     const handleReserve = async (book: Book) => {
+        // Check if user is already borrowing this book
+        const loans = await getLoans(user.id);
+        const isBorrowing = loans.some(loan => loan.bookId === book.id && loan.status === 'active');
+
+        if (isBorrowing) {
+            Alert.alert("Action Restricted", "You cannot reserve a book that you are currently borrowing.");
+            return;
+        }
+
         await reserveBook(user.id, book.id, book.title, book.author, book.coverUrl);
         loadReservations();
     };
@@ -149,6 +158,56 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
         loadBooks();
         setSelectedBook(null);
     };
+
+    // Automated Reservation Handling
+    useEffect(() => {
+        if (loading || books.length === 0 || reservations.length === 0) return;
+
+        const processReservations = async () => {
+            // Find reservations for books that are now Available
+            const availableReservations = reservations.filter(res => {
+                const book = books.find(b => b.id === res.bookId);
+                return book && book.status === 'Available';
+            });
+
+            if (availableReservations.length > 0) {
+                const newCartItems: Book[] = [];
+                const processedReservationIds: string[] = [];
+
+                for (const res of availableReservations) {
+                    // Prevent duplicate processing if already in cart (though cart state might lag, logic is safe-ish)
+                    if (cart.find(c => c.id === res.bookId)) continue;
+
+                    const book = books.find(b => b.id === res.bookId);
+                    if (book) {
+                        newCartItems.push(book);
+                        processedReservationIds.push(res.id);
+
+                        // Cancel reservation on server
+                        // We don't await this one-by-one to block UI, but we should ensure it happens
+                        cancelReservation(res.id).catch(e => console.error("Auto-cancel failed", e));
+                    }
+                }
+
+                if (newCartItems.length > 0) {
+                    // 1. Update Cart
+                    setCart(prev => [...prev, ...newCartItems]);
+
+                    // 2. Remove from local reservations to update UI immediately
+                    setReservations(prev => prev.filter(r => !processedReservationIds.includes(r.id)));
+
+                    // 3. Notify User
+                    const bookTitles = newCartItems.map(b => b.title).join(', ');
+                    Alert.alert(
+                        "Book Available!",
+                        `Good news! The following reserved books are now available and have been moved to your cart:\n\n${bookTitles}`
+                    );
+                }
+            }
+        };
+
+        processReservations();
+    }, [books, reservations]); // Run whenever books refresh or reservations load
 
     if (loading) {
         return <View style={styles.center}><ActivityIndicator size="large" color="#5D4037" /></View>;

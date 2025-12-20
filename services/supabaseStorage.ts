@@ -468,7 +468,7 @@ export const deleteBook = async (id: string): Promise<void> => {
 // --- Loans & Borrowing with Supabase ---
 
 export const getLoans = async (userId?: string): Promise<LoanRecord[]> => {
-    let query = supabase.from('loans').select('*');
+    let query = supabase.from('loans').select('*, users(name)');
     if (userId) {
         query = query.eq('user_id', userId);
     }
@@ -489,7 +489,8 @@ export const getLoans = async (userId?: string): Promise<LoanRecord[]> => {
         borrowedAt: row.borrowed_at,
         dueDate: row.due_date,
         returnedAt: row.returned_at,
-        status: row.status
+        status: row.status,
+        userName: row.users?.name
     }));
 };
 
@@ -593,7 +594,7 @@ export const updateLoan = async (loanId: string, updates: Partial<LoanRecord>): 
 };
 
 export const getReservations = async (): Promise<Reservation[]> => {
-    const { data, error } = await supabase.from('reservations').select('*');
+    const { data, error } = await supabase.from('reservations').select('*, users(name)');
     if (error) return [];
 
     return (data || []).map(row => ({
@@ -604,7 +605,8 @@ export const getReservations = async (): Promise<Reservation[]> => {
         bookAuthor: row.book_author,
         coverUrl: row.cover_url,
         reservedAt: row.reserved_at,
-        status: row.status
+        status: row.status,
+        userName: row.users?.name
     }));
 };
 
@@ -641,7 +643,7 @@ export const cancelReservation = async (reservationId: string): Promise<void> =>
 export const getBookings = async (): Promise<Booking[]> => {
     const { data, error } = await supabase
         .from('bookings')
-        .select('*, users (email)'); // Join with users table
+        .select('*, users (email, name)'); // Join with users table
 
     if (error) {
         console.error('Error fetching bookings:', error);
@@ -658,7 +660,8 @@ export const getBookings = async (): Promise<Booking[]> => {
         pax: row.pax,
         status: row.status,
         createdAt: row.created_at,
-        userEmail: row.users?.email // Extract email from joined data
+        userEmail: row.users?.email, // Extract email from joined data
+        userName: row.users?.name // Extract name from joined data
     }));
 };
 

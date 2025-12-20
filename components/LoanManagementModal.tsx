@@ -7,9 +7,10 @@ import { X, Calendar, Search, CheckCircle } from 'lucide-react-native';
 interface LoanManagementModalProps {
     visible: boolean;
     onClose: () => void;
+    mode?: 'active' | 'history'; // Defaults to 'active'
 }
 
-const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onClose }) => {
+const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onClose, mode = 'active' }) => {
     const [loans, setLoans] = useState<LoanRecord[]>([]);
     const [filteredLoans, setFilteredLoans] = useState<LoanRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -21,13 +22,14 @@ const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onCl
         if (visible) {
             loadLoans();
         }
-    }, [visible]);
+    }, [visible, mode]);
 
     useEffect(() => {
         if (search) {
             setFilteredLoans(loans.filter(l =>
                 l.bookTitle?.toLowerCase().includes(search.toLowerCase()) ||
-                l.userId?.toLowerCase().includes(search.toLowerCase())
+                l.userId?.toLowerCase().includes(search.toLowerCase()) ||
+                l.userName?.toLowerCase().includes(search.toLowerCase())
             ));
         } else {
             setFilteredLoans(loans);
@@ -37,10 +39,24 @@ const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onCl
     const loadLoans = async () => {
         setLoading(true);
         const data = await getLoans();
-        // filter mainly active loans, or show all? Request said "view all books currently on loan".
-        const active = data.filter(l => l.status === 'active');
-        setLoans(active);
-        setFilteredLoans(active);
+        let displayData = data;
+
+        if (mode === 'active') {
+            displayData = data.filter(l => l.status === 'active');
+        } else {
+            // History means completed loans? Or all loans including history? 
+            // "show all history on loan book". Usually implies past records. 
+            // Let's show everything or just returned. 
+            // Often "history" implies distinct from "active". 
+            // Let's show ALL (Active + Returned) or just Returned?
+            // Usually History = All records.
+            // But if I want to distinct, maybe just Returned?
+            // Let's show ALL for history effectively.
+            displayData = data;
+        }
+
+        setLoans(displayData);
+        setFilteredLoans(displayData);
         setLoading(false);
     };
 
@@ -65,6 +81,7 @@ const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onCl
     };
 
     const openEdit = (loan: LoanRecord) => {
+        if (loan.status !== 'active') return; // Only edit active loans
         setEditingLoan(loan);
         setNewDate(new Date(loan.dueDate).toISOString().split('T')[0]);
     };
@@ -73,7 +90,7 @@ const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onCl
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Text style={styles.title}>Manage Active Loans</Text>
+                    <Text style={styles.title}>{mode === 'active' ? 'Active Loans' : 'Loan History'}</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <X size={24} color="#1c1917" />
                     </TouchableOpacity>
@@ -83,7 +100,7 @@ const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onCl
                     <Search size={20} color="#a8a29e" />
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="Search user or book..."
+                        placeholder="Search user, book..."
                         value={search}
                         onChangeText={setSearch}
                     />
@@ -94,24 +111,37 @@ const LoanManagementModal: React.FC<LoanManagementModalProps> = ({ visible, onCl
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.list}
                     renderItem={({ item }) => (
-                        <TouchableOpacity style={styles.card} onPress={() => openEdit(item)}>
+                        <TouchableOpacity
+                            style={styles.card}
+                            onPress={() => openEdit(item)}
+                            disabled={item.status !== 'active'}
+                        >
                             <View style={styles.cardHeader}>
                                 <Text style={styles.bookTitle} numberOfLines={1}>{item.bookTitle}</Text>
-                                <View style={[styles.statusBadge, { backgroundColor: '#fef3c7' }]}>
-                                    <Text style={[styles.statusText, { color: '#d97706' }]}>Active</Text>
+                                <View style={[styles.statusBadge, {
+                                    backgroundColor: item.status === 'active' ? '#fef3c7' : '#dcfce7'
+                                }]}>
+                                    <Text style={[styles.statusText, {
+                                        color: item.status === 'active' ? '#d97706' : '#16a34a'
+                                    }]}>{item.status}</Text>
                                 </View>
                             </View>
-                            <Text style={styles.detail}>User ID: {item.userId}</Text>
+                            <Text style={styles.detail}>User: {item.userName || item.userId}</Text>
                             <Text style={styles.detail}>Borrowed: {new Date(item.borrowedAt).toLocaleDateString()}</Text>
+                            {item.returnedAt && (
+                                <Text style={styles.detail}>Returned: {new Date(item.returnedAt).toLocaleDateString()}</Text>
+                            )}
                             <View style={styles.dueContainer}>
-                                <Calendar size={14} color="#dc2626" />
-                                <Text style={styles.dueText}>Due: {new Date(item.dueDate).toLocaleDateString()}</Text>
+                                <Calendar size={14} color={item.status === 'active' ? "#dc2626" : "#16a34a"} />
+                                <Text style={[styles.dueText, { color: item.status === 'active' ? "#dc2626" : "#16a34a" }]}>
+                                    Due: {new Date(item.dueDate).toLocaleDateString()}
+                                </Text>
                             </View>
                         </TouchableOpacity>
                     )}
                     ListEmptyComponent={
                         <View style={styles.empty}>
-                            <Text style={styles.emptyText}>No active loans found.</Text>
+                            <Text style={styles.emptyText}>No records found.</Text>
                         </View>
                     }
                 />

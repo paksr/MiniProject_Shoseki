@@ -14,8 +14,11 @@ import { updateUserDetails, getLoans, getReservations, cancelReservation, return
 import BookCard from '../components/BookCard';
 import Button from '../components/Button';
 import BookDetailsModal from '../components/BookDetailsModal';
+
 import LoanManagementModal from '../components/LoanManagementModal';
 import PaymentModal from '../components/PaymentModal';
+import AvailableBooksModal from '../components/AvailableBooksModal';
+import ReservedBooksModal from '../components/ReservedBooksModal';
 
 // --- Discover Screen ---
 export const DiscoverScreen = ({
@@ -176,6 +179,9 @@ export const AccountScreen = ({
     const [newName, setNewName] = useState(user.name);
     const [selectedBook, setSelectedBook] = useState<Book | null>(null);
     const [showLoanManagement, setShowLoanManagement] = useState(false);
+    const [loanManagementMode, setLoanManagementMode] = useState<'active' | 'history'>('active');
+    const [showAvailableBooks, setShowAvailableBooks] = useState(false);
+    const [showReservedBooks, setShowReservedBooks] = useState(false);
     const [showPayment, setShowPayment] = useState(false);
 
     useEffect(() => {
@@ -188,14 +194,22 @@ export const AccountScreen = ({
 
     const loadData = async () => {
         setLoading(true);
-        const l = await getLoans(user.id);
+        // If Admin, fetch ALL loans (pass undefined to getLoans)
+        const l = await getLoans(isAdmin ? undefined : user.id);
         const b = await getBookings();
         const p = await getPenalties(user.id);
         const r = await getReservations();
+
         setLoans(l);
         setBookings(b.filter(bk => bk.userId === user.id));
         setPenalties(p);
-        setReservations(r.filter(res => res.userId === user.id && res.status === 'active'));
+
+        // If Admin, show ALL active reservations. If User, show only theirs.
+        setReservations(isAdmin
+            ? r.filter(res => res.status === 'active')
+            : r.filter(res => res.userId === user.id && res.status === 'active')
+        );
+
         setLoading(false);
     };
 
@@ -341,24 +355,53 @@ export const AccountScreen = ({
                 </TouchableOpacity>
             </View>
 
-            {isAdmin && stats ? (
-                <View style={styles.statsRow}>
-                    {stats.map((stat, idx) => (
-                        <TouchableOpacity
-                            key={idx}
-                            style={styles.statCard}
-                            disabled={stat.label !== 'On Loan'}
-                            onPress={() => {
-                                if (stat.label === 'On Loan') setShowLoanManagement(true);
-                            }}
-                        >
-                            <stat.Icon size={20} color={stat.color} />
-                            <Text style={styles.statValue}>{stat.value}</Text>
-                            <Text style={styles.statLabel}>{stat.label}</Text>
-                        </TouchableOpacity>
-                    ))}
+            {isAdmin ? (
+                <View style={styles.gridContainer}>
+                    <TouchableOpacity
+                        style={[styles.statCard, { backgroundColor: '#dcfce7' }]}
+                        onPress={() => setShowAvailableBooks(true)}
+                    >
+                        <CheckCircle size={24} color="#16a34a" />
+                        <Text style={styles.statValue}>{books.filter(b => b.status === BookStatus.Available).length}</Text>
+                        <Text style={[styles.statLabel, { color: '#16a34a' }]}>Available Books</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.statCard, { backgroundColor: '#fef3c7' }]}
+                        onPress={() => {
+                            setLoanManagementMode('active');
+                            setShowLoanManagement(true);
+                        }}
+                    >
+                        <BookOpen size={24} color="#d97706" />
+                        <Text style={styles.statValue}>{loans.filter(l => l.status === 'active').length}</Text>
+                        <Text style={[styles.statLabel, { color: '#d97706' }]}>Active Loans</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.statCard, { backgroundColor: '#e7e5e4' }]}
+                        onPress={() => {
+                            setLoanManagementMode('history');
+                            setShowLoanManagement(true);
+                        }}
+                    >
+                        <Clock size={24} color="#57534e" />
+                        <Text style={styles.statValue}>{loans.length}</Text>
+                        <Text style={[styles.statLabel, { color: '#57534e' }]}>Loan History</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.statCard, { backgroundColor: '#ffedd5' }]}
+                        onPress={() => setShowReservedBooks(true)}
+                    >
+                        <AlertCircle size={24} color="#ea580c" />
+                        <Text style={styles.statValue}>{reservations.length}</Text>
+                        <Text style={[styles.statLabel, { color: '#ea580c' }]}>Reserved Books</Text>
+                    </TouchableOpacity>
                 </View>
-            ) : (
+            ) : null}
+
+            {!isAdmin && (
                 <>
                     <View style={styles.statsRow}>
                         <View style={styles.statCard}>
@@ -442,7 +485,20 @@ export const AccountScreen = ({
                 />
             )}
 
-            <LoanManagementModal visible={showLoanManagement} onClose={() => setShowLoanManagement(false)} />
+            <LoanManagementModal
+                visible={showLoanManagement}
+                onClose={() => setShowLoanManagement(false)}
+                mode={loanManagementMode}
+            />
+            <AvailableBooksModal
+                visible={showAvailableBooks}
+                onClose={() => setShowAvailableBooks(false)}
+                books={books}
+            />
+            <ReservedBooksModal
+                visible={showReservedBooks}
+                onClose={() => setShowReservedBooks(false)}
+            />
 
             <PaymentModal
                 visible={showPayment}
