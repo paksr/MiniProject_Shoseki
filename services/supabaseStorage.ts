@@ -267,6 +267,41 @@ export const getBooks = async (): Promise<Book[]> => {
     }
 };
 
+export const getBook = async (id: string): Promise<Book | null> => {
+    try {
+        const { data, error } = await supabase
+            .from('books')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            console.error('Supabase error fetching book:', error.message);
+            return null;
+        }
+
+        if (!data) return null;
+
+        return {
+            id: data.id,
+            title: data.title,
+            author: data.author,
+            coverUrl: data.cover_url,
+            description: data.description,
+            genre: data.genre,
+            pages: data.pages,
+            status: (data.status === BookStatus.OutOfStock ? BookStatus.Available : data.status) as BookStatus,
+            addedAt: data.added_at,
+            rating: data.rating,
+            location: data.location,
+            isbn: data.isbn
+        };
+    } catch (e) {
+        console.error("Error fetching book:", e);
+        return null;
+    }
+};
+
 // Helper to upload image to Supabase Storage
 const uploadImage = async (uri: string): Promise<string> => {
     try {

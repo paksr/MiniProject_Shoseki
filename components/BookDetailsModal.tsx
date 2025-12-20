@@ -14,7 +14,7 @@ import {
 import { X, BookOpen, MapPin, Hash, Layers, ShoppingBag, Pencil, Trash2, Clock } from 'lucide-react-native';
 import { Book, BookStatus, Rating } from '../types';
 import Button from './Button';
-import { getRatings, addRating, deleteRating } from '../services/supabaseStorage';
+import { getRatings, addRating, deleteRating, getBook } from '../services/supabaseStorage';
 
 interface BookDetailsModalProps {
     book: Book;
@@ -61,6 +61,13 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
         setUserRating(tempRating); // Optimistic update UI
         try {
             await addRating(currentUserId, book.id, tempRating, comment);
+
+            // Fetch updated book data to get new average rating
+            const updatedBook = await getBook(book.id);
+            if (updatedBook) {
+                setBook(updatedBook);
+            }
+
             await loadRatings(); // Refresh list
             setComment(""); // Clear comment
             setTempRating(0); // Reset temp
@@ -74,6 +81,13 @@ const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
     const handleDeleteRating = async (ratingId: string) => {
         try {
             await deleteRating(ratingId, book.id);
+
+            // Fetch updated book data to get new average rating
+            const updatedBook = await getBook(book.id);
+            if (updatedBook) {
+                setBook(updatedBook);
+            }
+
             await loadRatings(); // Refresh list
             Alert.alert("Success", "Rating deleted.");
         } catch (error) {
