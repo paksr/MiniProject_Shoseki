@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { User, Book, BookStatus, LoanRecord, Reservation, Booking, BookingStatus, Rating } from '../types';
+import { User, Book, BookStatus, LoanRecord, Reservation, Booking, BookingStatus, Rating, Penalty } from '../types';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 
@@ -535,15 +535,61 @@ export const returnBook = async (bookId: string): Promise<void> => {
         .limit(1);
 
     if (loans && loans.length > 0) {
+        const loan = loans[0];
+        const now = new Date();
+        const dueDate = new Date(loan.due_date);
+
+        // Check for penalty
+        if (now > dueDate) {
+            const diffTime = Math.abs(now.getTime() - dueDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            // Penalty Calculation: RM0.50 per day late
+            const penaltyAmount = diffDays * 0.50;
+
+            if (penaltyAmount > 0) {
+                const { error: penaltyError } = await supabase.from('penalties').insert({
+                    user_id: loan.user_id,
+                    amount: penaltyAmount,
+                    reason: `Late Return: "${loan.book_title}" (${diffDays} days overdue)`,
+                    status: 'unpaid'
+                });
+
+                if (penaltyError) {
+                    // Swallow "table not found" errors to prevent UI crash/alert spam if migration wasn't run
+                    if (!penaltyError.message.includes('relation "public.penalties" does not exist') &&
+                        !penaltyError.message.includes('Could not find the table') &&
+                        penaltyError.code !== '42P01') {
+                        console.error("Error creating penalty:", penaltyError);
+                    } else {
+                        console.warn("Penalty not created: 'penalties' table missing in Supabase.");
+                    }
+                }
+            }
+        }
+
         // Update loan status
         await supabase.from('loans').update({
             status: 'returned',
-            returned_at: new Date().toISOString()
-        }).eq('id', loans[0].id);
+            returned_at: now.toISOString()
+        }).eq('id', loan.id);
     }
 
     // Update book status
     await supabase.from('books').update({ status: BookStatus.Available }).eq('id', bookId);
+};
+
+export const updateLoan = async (loanId: string, updates: Partial<LoanRecord>): Promise<void> => {
+    const supabaseUpdates: any = {};
+    if (updates.dueDate) supabaseUpdates.due_date = updates.dueDate;
+    if (updates.status) supabaseUpdates.status = updates.status;
+
+    const { error } = await supabase
+        .from('loans')
+        .update(supabaseUpdates)
+        .eq('id', loanId);
+
+    if (error) throw new Error(error.message);
 };
 
 export const getReservations = async (): Promise<Reservation[]> => {
@@ -650,6 +696,44 @@ export const cancelBooking = async (id: string): Promise<void> => {
 
 export const updateBookingStatus = async (id: string, status: BookingStatus): Promise<void> => {
     await supabase.from('bookings').update({ status: status }).eq('id', id);
+};
+
+// --- Penalties with Supabase ---
+
+export const getPenalties = async (userId: string): Promise<Penalty[]> => {
+    const { data, error } = await supabase
+        .from('penalties')
+        .select('*')
+        .eq('user_id', userId);
+
+    if (error) {
+        // Graceful fallback if table missing
+        if (error.message.includes('relation "public.penalties" does not exist') ||
+            error.message.includes('Could not find the table') ||
+            error.code === '42P01') {
+            return [];
+        }
+        console.error('Error fetching penalties:', error.message);
+        return [];
+    }
+
+    return (data || []).map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        amount: row.amount,
+        reason: row.reason,
+        date: row.created_at,
+        status: row.status
+    }));
+};
+
+export const payPenalty = async (penaltyId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('penalties')
+        .update({ status: 'paid' })
+        .eq('id', penaltyId);
+
+    if (error) throw new Error(error.message);
 };
 
 // --- Ratings with Supabase ---

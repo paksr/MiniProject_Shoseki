@@ -9,11 +9,13 @@ import {
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Book, BookStatus, User, LoanRecord, Booking, Penalty, Reservation } from '../types';
-import { getBookings, getPenalties } from '../services/storage';
-import { updateUserDetails, getLoans, getReservations, cancelReservation, returnBook } from '../services/supabaseStorage';
+import { getBookings } from '../services/storage';
+import { updateUserDetails, getLoans, getReservations, cancelReservation, returnBook, payPenalty, getPenalties } from '../services/supabaseStorage';
 import BookCard from '../components/BookCard';
 import Button from '../components/Button';
 import BookDetailsModal from '../components/BookDetailsModal';
+import LoanManagementModal from '../components/LoanManagementModal';
+import PaymentModal from '../components/PaymentModal';
 
 // --- Discover Screen ---
 export const DiscoverScreen = ({
@@ -173,6 +175,8 @@ export const AccountScreen = ({
     const [isEditingName, setIsEditingName] = useState(false);
     const [newName, setNewName] = useState(user.name);
     const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+    const [showLoanManagement, setShowLoanManagement] = useState(false);
+    const [showPayment, setShowPayment] = useState(false);
 
     useEffect(() => {
         setNewName(user.name);
@@ -259,6 +263,21 @@ export const AccountScreen = ({
 
     const activeLoans = loans.filter(l => l.status === 'active');
     const unpaidPenalties = penalties.filter(p => p.status === 'unpaid');
+    const totalPenalty = unpaidPenalties.reduce((s, p) => s + p.amount, 0);
+
+    const handlePayPenalty = async () => {
+        // Optimistically pay all unpaid penalties
+        try {
+            for (const p of unpaidPenalties) {
+                await payPenalty(p.id);
+            }
+            Alert.alert("Success", "Payment successful! Penalties cleared.");
+            setShowPayment(false);
+            loadData();
+        } catch (e: any) {
+            Alert.alert("Error", "Payment failed: " + e.message);
+        }
+    };
 
     const stats = isAdmin ? [
         { label: 'Available', value: books.filter(b => b.status === BookStatus.Available).length, color: '#10b981', Icon: CheckCircle },
@@ -325,11 +344,18 @@ export const AccountScreen = ({
             {isAdmin && stats ? (
                 <View style={styles.statsRow}>
                     {stats.map((stat, idx) => (
-                        <View key={idx} style={styles.statCard}>
+                        <TouchableOpacity
+                            key={idx}
+                            style={styles.statCard}
+                            disabled={stat.label !== 'On Loan'}
+                            onPress={() => {
+                                if (stat.label === 'On Loan') setShowLoanManagement(true);
+                            }}
+                        >
                             <stat.Icon size={20} color={stat.color} />
                             <Text style={styles.statValue}>{stat.value}</Text>
                             <Text style={styles.statLabel}>{stat.label}</Text>
-                        </View>
+                        </TouchableOpacity>
                     ))}
                 </View>
             ) : (
@@ -342,10 +368,17 @@ export const AccountScreen = ({
                         </View>
                         <View style={styles.statCard}>
                             <AlertCircle size={18} color="#ef4444" />
-                            <Text style={styles.statValue}>MYR {unpaidPenalties.reduce((s, p) => s + p.amount, 0).toFixed(2)}</Text>
+                            <Text style={styles.statValue}>MYR {totalPenalty.toFixed(2)}</Text>
                             <Text style={styles.statLabel}>Penalties</Text>
                         </View>
                     </View>
+
+                    {totalPenalty > 0 && (
+                        <TouchableOpacity style={styles.payNowSection} onPress={() => setShowPayment(true)}>
+                            <Text style={styles.payNowText}>Pay Outstanding Penalties</Text>
+                            <Text style={styles.payNowSub}>You cannot borrow new books until cleared.</Text>
+                        </TouchableOpacity>
+                    )}
 
                     <Text style={styles.sectionTitle}>Currently Reading</Text>
                     {activeLoans.length === 0 ? (
@@ -408,6 +441,15 @@ export const AccountScreen = ({
                     onReturn={handleReturnBook}
                 />
             )}
+
+            <LoanManagementModal visible={showLoanManagement} onClose={() => setShowLoanManagement(false)} />
+
+            <PaymentModal
+                visible={showPayment}
+                amount={totalPenalty}
+                onClose={() => setShowPayment(false)}
+                onPay={handlePayPenalty}
+            />
         </ScrollView>
     );
 };
@@ -468,4 +510,7 @@ const styles = StyleSheet.create({
     cancelButton: { padding: 8, backgroundColor: '#fee2e2', borderRadius: 20 },
     gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     gridItem: { width: '48%' },
+    payNowSection: { backgroundColor: '#fee2e2', padding: 16, borderRadius: 16, marginBottom: 24, alignItems: 'center', borderWidth: 1, borderColor: '#fca5a5' },
+    payNowText: { color: '#b91c1c', fontSize: 18, fontWeight: '700', marginBottom: 4 },
+    payNowSub: { color: '#b91c1c', fontSize: 12 },
 });

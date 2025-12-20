@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Library, Search, CalendarDays, User as UserIcon } from 'lucide-react-native';
 
 
-import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation } from './services/supabaseStorage';
+import { getActiveUser, setActiveUser, getBooks, addBook, updateBookDetails, deleteBook, borrowBooks, reserveBook, getReservations, cancelReservation, getPenalties } from './services/supabaseStorage';
 // import { borrowBooks, reserveBook, getReservations, cancelReservation } from './services/storage'; // Removed local storage
 import { User, Book, BookStatus, Reservation } from './types';
 import LoginScreen from './screens/LoginScreen';
@@ -64,15 +64,28 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
     const isAdmin = user.role === 'admin';
 
     useEffect(() => {
+        const interval = setInterval(() => {
+            refreshBooks(); // Silent refresh
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
         loadBooks();
         loadReservations();
-    }, []);
+    }, [currentTab]);
 
     const loadBooks = async () => {
         setLoading(true);
         const b = await getBooks();
         setBooks(b);
         setLoading(false);
+    };
+
+    const refreshBooks = async () => {
+        const b = await getBooks();
+        setBooks(b);
     };
 
     const loadReservations = async () => {
@@ -91,6 +104,18 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
     };
 
     const handleCheckout = async () => {
+        // Check for penalties first
+        const p = await getPenalties(user.id);
+        const hasUnpaid = p.some(penalty => penalty.status === 'unpaid');
+
+        if (hasUnpaid) {
+            Alert.alert(
+                "Restricted",
+                "You have unpaid penalties. Please go to the Account section to pay them before borrowing new books."
+            );
+            return;
+        }
+
         await borrowBooks(user.id, cart.map(c => c.id));
         Alert.alert('Success', 'Books borrowed successfully!');
         setCart([]);
