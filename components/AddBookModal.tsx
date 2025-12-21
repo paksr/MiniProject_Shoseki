@@ -12,10 +12,10 @@ import {
   Alert,
   Image
 } from 'react-native';
-import { X, Search, Sparkles, BookOpen, Save, Camera, Pencil } from 'lucide-react-native';
+import { X, BookOpen, Save, Camera, Pencil } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Button from './Button';
-import { generateBookDetails } from '../services/geminiService';
+
 import { Book, BookStatus } from '../types';
 
 interface AddBookModalProps {
@@ -26,8 +26,7 @@ interface AddBookModalProps {
 }
 
 const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, initialBook }) => {
-  const [query, setQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+
   const [formData, setFormData] = useState({
     title: '',
     author: '',
@@ -38,6 +37,13 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
     coverUrl: 'https://picsum.photos/200/300',
     location: '',
   });
+
+  // Location State
+  const [selectedRow, setSelectedRow] = useState<string>('A');
+  const [selectedCol, setSelectedCol] = useState<number>(1);
+
+  const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const cols = Array.from({ length: 12 }, (_, i) => i + 1);
 
   useEffect(() => {
     if (initialBook) {
@@ -51,6 +57,15 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
         coverUrl: initialBook.coverUrl,
         location: initialBook.location || '',
       });
+
+      // Parse Location
+      if (initialBook.location) {
+        const match = initialBook.location.match(/Shelf ([A-F])-(\d+)/) || initialBook.location.match(/([A-F])-(\d+)/);
+        if (match) {
+          setSelectedRow(match[1]);
+          setSelectedCol(parseInt(match[2]));
+        }
+      }
     }
   }, [initialBook]);
 
@@ -67,22 +82,7 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
     }
   };
 
-  const handleAISearch = async () => {
-    if (!query) return;
-    setIsSearching(true);
-    try {
-      const details = await generateBookDetails(query);
-      setFormData(prev => ({
-        ...prev,
-        ...details,
-        coverUrl: `https://picsum.photos/seed/${encodeURIComponent(details.title)}/200/300`
-      }));
-    } catch (error) {
-      Alert.alert("Error", "Failed to fetch book details. Please enter manually.");
-    } finally {
-      setIsSearching(false);
-    }
-  };
+
 
   const handleSubmit = () => {
     if (!formData.title || !formData.author || !formData.genre) {
@@ -94,10 +94,12 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
       onEdit({
         ...initialBook,
         ...formData,
+        location: `Shelf ${selectedRow}-${selectedCol}`,
       });
     } else {
       onAdd({
         ...formData,
+        location: `Shelf ${selectedRow}-${selectedCol}`,
         status: BookStatus.Available,
         rating: 0
       });
@@ -131,33 +133,7 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* AI Auto-fill */}
-            {!initialBook && (
-              <View style={styles.aiSection}>
-                <Text style={styles.aiLabel}>AI Auto-fill</Text>
-                <View style={styles.aiRow}>
-                  <TextInput
-                    style={styles.aiInput}
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Enter title or ISBN..."
-                    placeholderTextColor="#a8a29e"
-                    onSubmitEditing={handleAISearch}
-                  />
-                  <TouchableOpacity
-                    style={styles.aiButton}
-                    onPress={handleAISearch}
-                    disabled={isSearching}
-                  >
-                    {isSearching ? (
-                      <Sparkles size={18} color="#5D4037" />
-                    ) : (
-                      <Search size={18} color="#5D4037" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
+
 
             {/* Form Fields */}
             <View style={styles.form}>
@@ -221,13 +197,51 @@ const AddBookModal: React.FC<AddBookModalProps> = ({ onClose, onAdd, onEdit, ini
 
               <View style={styles.field}>
                 <Text style={styles.label}>Shelf Location</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.location}
-                  onChangeText={(text) => setFormData({ ...formData, location: text })}
-                  placeholder="e.g. A-12"
-                  placeholderTextColor="#a8a29e"
-                />
+
+                <View style={styles.locationContainer}>
+                  {/* Row Selection */}
+                  <View>
+                    <Text style={styles.subLabel}>Row</Text>
+                    <View style={styles.rowSelector}>
+                      {rows.map(row => (
+                        <TouchableOpacity
+                          key={row}
+                          style={[styles.rowButton, selectedRow === row && styles.rowButtonSelected]}
+                          onPress={() => setSelectedRow(row)}
+                        >
+                          <Text style={[styles.rowButtonText, selectedRow === row && styles.rowButtonTextSelected]}>
+                            {row}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Column Selection */}
+                  <View>
+                    <Text style={styles.subLabel}>Column</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colScroll}>
+                      {cols.map(col => (
+                        <TouchableOpacity
+                          key={col}
+                          style={[styles.colButton, selectedCol === col && styles.colButtonSelected]}
+                          onPress={() => setSelectedCol(col)}
+                        >
+                          <Text style={[styles.colButtonText, selectedCol === col && styles.colButtonTextSelected]}>
+                            {col}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Preview */}
+                  <View style={styles.locationPreview}>
+                    <Text style={styles.locationPreviewText}>
+                      Selected: Shelf {selectedRow}-{selectedCol}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               <View style={styles.field}>
@@ -326,39 +340,7 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: 500,
   },
-  aiSection: {
-    backgroundColor: '#fef3c7',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  aiLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#d97706',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  aiRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  aiInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#1c1917',
-  },
-  aiButton: {
-    backgroundColor: '#D7CCC8',
-    padding: 12,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
   form: {
     gap: 16,
   },
@@ -440,6 +422,82 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
+  },
+  locationContainer: {
+    backgroundColor: '#f5f5f4',
+    padding: 12,
+    borderRadius: 12,
+    gap: 16,
+  },
+  subLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#78716c',
+    marginBottom: 8,
+  },
+  rowSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  rowButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+  },
+  rowButtonSelected: {
+    backgroundColor: '#5D4037',
+    borderColor: '#5D4037',
+  },
+  rowButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#57534e',
+  },
+  rowButtonTextSelected: {
+    color: '#fff',
+  },
+  colScroll: {
+    flexGrow: 0,
+  },
+  colButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e7e5e4',
+    marginRight: 8,
+  },
+  colButtonSelected: {
+    backgroundColor: '#5D4037',
+    borderColor: '#5D4037',
+  },
+  colButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#57534e',
+  },
+  colButtonTextSelected: {
+    color: '#fff',
+  },
+  locationPreview: {
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e7e5e4',
+  },
+  locationPreviewText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#5D4037',
   },
 });
 

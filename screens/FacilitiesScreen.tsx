@@ -101,10 +101,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
             Alert.alert('Error', 'Please fill in all fields');
             return;
         }
-        if (isSunday(selectedDate)) {
-            Alert.alert('Error', 'Cannot book on Sundays');
-            return;
-        }
+
 
         if (selectedStartTime >= selectedEndTime) {
             Alert.alert('Error', 'End time must be after start time');
@@ -191,7 +188,13 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     };
 
     // Filter bookings for display
-    const myUpcomingBookings = bookings.filter(b => b.userId === user.id && new Date(b.date) >= new Date());
+    const myUpcomingBookings = bookings.filter(b => {
+        if (b.userId !== user.id) return false;
+        const bookingDate = new Date(b.date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to midnight for accurate date comparison
+        return bookingDate >= today;
+    });
 
     // Admin Lists
     const pendingBookings = bookings.filter(b => b.status === 'pending');
@@ -360,7 +363,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                                         const date = new Date();
                                         date.setDate(date.getDate() + offset);
                                         const dateStr = date.toISOString().split('T')[0];
-                                        if (isSunday(dateStr)) return null;
+
                                         const isSelected = selectedDate === dateStr;
                                         return (
                                             <TouchableOpacity

@@ -18,7 +18,7 @@ import CartScreen from './screens/CartScreen';
 import BookCard from './components/BookCard';
 import BookDetailsModal from './components/BookDetailsModal';
 import AddBookModal from './components/AddBookModal';
-import AILibrarian from './components/AILibrarian';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -246,7 +246,7 @@ const MainApp = ({ user, onLogout, onUserUpdate }: { user: User, onLogout: () =>
 
             <TabBar currentTab={currentTab} onTabChange={setCurrentTab} />
 
-            <AILibrarian />
+
 
             {selectedBook && (
                 <BookDetailsModal
