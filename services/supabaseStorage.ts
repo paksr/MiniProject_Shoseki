@@ -246,21 +246,69 @@ export const getBooks = async (): Promise<Book[]> => {
             data = result.data;
         }
 
-        return (data || []).map(row => ({
-            id: row.id,
-            title: row.title,
-            author: row.author,
-            coverUrl: row.cover_url,
-            description: row.description,
-            genre: row.genre,
-            pages: row.pages,
-            // Override OutOfStock to Available
-            status: (row.status === BookStatus.OutOfStock ? BookStatus.Available : row.status) as BookStatus,
-            addedAt: row.added_at,
-            rating: row.rating,
-            location: row.location,
-            isbn: row.isbn
-        }));
+        // --- SELF-HEALING: Synchronize Book Status with Actual Active Loans ---
+        // Fetch all currently active loans to verify truth
+        const { data: activeLoans } = await supabase
+            .from('loans')
+            .select('book_id')
+            .eq('status', 'active');
+
+        const activeLoanBookIds = new Set((activeLoans || []).map(l => l.book_id));
+
+        return (data || []).map(row => {
+            let status = row.status as BookStatus;
+            const hasActiveLoan = activeLoanBookIds.has(row.id);
+            let needsCorrection = false;
+            let correctStatus = status;
+
+            // Scenario 1: Book says "On Loan" but no active loan exists -> Make Available
+            if (status === BookStatus.OnLoan && !hasActiveLoan) {
+                correctStatus = BookStatus.Available;
+                needsCorrection = true;
+            }
+            // Scenario 2: Book says "Available" (or OutOfStock) but active loan exists -> Make On Loan
+            else if (status !== BookStatus.OnLoan && hasActiveLoan) {
+                correctStatus = BookStatus.OnLoan;
+                needsCorrection = true;
+            }
+
+            // Apply correction
+            if (needsCorrection) {
+                console.log(`[Self-Healing] Correcting book ${row.id} status from '${status}' to '${correctStatus}'`);
+                status = correctStatus;
+                // Async update to DB (fire and forget to not slow down read)
+                supabase
+                    .from('books')
+                    .update({ status: correctStatus })
+                    .eq('id', row.id)
+                    .then(({ error }) => {
+                        if (error) console.error(`[Self-Healing] Failed to update book ${row.id}:`, error.message);
+                    });
+            }
+
+            // Handle legacy OutOfStock override if logic demands it (though Scenario 2 might cover it if on loan)
+            // If it's OutOfStock and NOT on loan, we treat it as Available per original logic?
+            // Original logic: (row.status === BookStatus.OutOfStock ? BookStatus.Available : row.status)
+            // Let's preserve that logic for non-loan cases if we didn't force it to OnLoan.
+            if (status === BookStatus.OutOfStock) {
+                status = BookStatus.Available;
+            }
+
+            return {
+                id: row.id,
+                title: row.title,
+                author: row.author,
+                coverUrl: row.cover_url,
+                description: row.description,
+                genre: row.genre,
+                pages: row.pages,
+                status: status,
+                addedAt: row.added_at,
+                rating: row.rating,
+                location: row.location,
+                isbn: row.isbn
+            };
+        });
     } catch (e) {
         console.error("Error fetching books:", e);
         return [];
