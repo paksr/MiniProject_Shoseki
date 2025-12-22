@@ -41,6 +41,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
     const [selectedStartTime, setSelectedStartTime] = useState('');
     const [selectedEndTime, setSelectedEndTime] = useState('');
     const [pax, setPax] = useState('1');
+    const [error, setError] = useState('');
 
     const isAdmin = user.role === 'admin';
 
@@ -93,30 +94,42 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
         setSelectedDate(new Date().toISOString().split('T')[0]);
         setSelectedStartTime('');
         setSelectedEndTime('');
+        setError('');
         setShowBookingModal(true);
     };
 
     const handleBooking = async () => {
+        setError('');
         if (!selectedFacility || !selectedDate || !selectedStartTime || !selectedEndTime) {
-            Alert.alert('Error', 'Please fill in all fields');
+            setError('Please fill in all fields');
             return;
         }
 
 
         if (selectedStartTime >= selectedEndTime) {
-            Alert.alert('Error', 'End time must be after start time');
+            setError('End time must be after start time');
+            return;
+        }
+
+        // VALIDATION: Max 2 hours
+        const startHour = parseInt(selectedStartTime.split(':')[0]);
+        const endHour = parseInt(selectedEndTime.split(':')[0]);
+        const durationHours = endHour - startHour;
+
+        if (durationHours > 2) {
+            setError('Booking duration cannot exceed 2 hours');
             return;
         }
 
         const bookingStart = new Date(`${selectedDate}T${selectedStartTime}:00`);
         if (bookingStart < new Date()) {
-            Alert.alert('Error', 'Cannot book a time in the past');
+            setError('Cannot book a time in the past');
             return;
         }
 
         const paxNum = parseInt(pax) || 1;
         if (paxNum > selectedFacility.capacity) {
-            Alert.alert('Error', `Maximum capacity is ${selectedFacility.capacity} PAX`);
+            setError(`Maximum capacity is ${selectedFacility.capacity} PAX`);
             return;
         }
 
@@ -133,7 +146,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
         });
 
         if (hasActiveBooking) {
-            Alert.alert('Limit Reached', 'You already have an active or upcoming booking. You can only make one booking at a time.');
+            setError('You already have an active or upcoming booking. You can only make one booking at a time.');
             return;
         }
 
@@ -150,7 +163,7 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
         });
 
         if (hasOverlap) {
-            Alert.alert('Unavailable', 'This time slot overlaps with an existing booking.');
+            setError('This time slot overlaps with an existing booking.');
             return;
         }
 
@@ -356,6 +369,15 @@ const FacilitiesScreen: React.FC<FacilitiesScreenProps> = ({ user }) => {
                         </View>
 
                         <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                            {error ? (
+                                <View style={styles.errorContainer}>
+                                    <View style={styles.errorIcon}>
+                                        <X size={14} color="#fff" />
+                                    </View>
+                                    <Text style={styles.errorText}>{error}</Text>
+                                </View>
+                            ) : null}
+
                             <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Date</Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateRow}>
@@ -588,6 +610,31 @@ const styles = StyleSheet.create({
     rejectBtn: { backgroundColor: '#fee2e2' },
     approveText: { fontSize: 14, fontWeight: '700', color: '#16a34a' },
     rejectText: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
+    errorContainer: {
+        backgroundColor: '#fee2e2',
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#fecaca',
+    },
+    errorIcon: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#dc2626',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    errorText: {
+        flex: 1,
+        color: '#dc2626',
+        fontSize: 13,
+        fontWeight: '600',
+    },
 });
 
 export default FacilitiesScreen;

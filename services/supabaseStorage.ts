@@ -5,8 +5,40 @@ import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 
 const ACTIVE_USER_KEY = 'shoseki_active_user';
+const RECENT_USERS_KEY = 'shoseki_recent_users';
 
 // --- User Services with Supabase ---
+
+export const getRecentUsers = async (): Promise<User[]> => {
+    try {
+        const stored = await AsyncStorage.getItem(RECENT_USERS_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch {
+        return [];
+    }
+};
+
+export const saveRecentUser = async (user: User): Promise<void> => {
+    try {
+        const users = await getRecentUsers();
+        // Remove existing entry for this email to avoid duplicates and move to front
+        const filtered = users.filter(u => u.email !== user.email);
+        const updated = [user, ...filtered].slice(0, 4); // Keep only top 4
+        await AsyncStorage.setItem(RECENT_USERS_KEY, JSON.stringify(updated));
+    } catch (e) {
+        console.error('Error saving recent user:', e);
+    }
+};
+
+export const removeRecentUser = async (email: string): Promise<void> => {
+    try {
+        const users = await getRecentUsers();
+        const updated = users.filter(u => u.email !== email);
+        await AsyncStorage.setItem(RECENT_USERS_KEY, JSON.stringify(updated));
+    } catch (e) {
+        console.error('Error removing recent user:', e);
+    }
+};
 
 export const getActiveUser = async (): Promise<User | null> => {
     try {
@@ -195,6 +227,49 @@ export const updateUserDetails = async (userId: string, updates: Partial<User>):
     }
 
     return updatedUser;
+};
+
+export const requestPasswordResetOTP = async (email: string): Promise<void> => {
+    const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+            shouldCreateUser: true, // Allow creating auth entries for existing public users
+        },
+    });
+
+    if (error) {
+        throw new Error(error.message);
+    }
+};
+
+export const verifyPasswordResetOTP = async (email: string, token: string): Promise<void> => {
+    // Try multiple types as Supabase behavior depends on whether the user is new or existing
+    const types: ('signup' | 'email' | 'magiclink' | 'recovery')[] = ['signup', 'email', 'magiclink', 'recovery'];
+
+    let lastError = null;
+    for (const type of types) {
+        const { error } = await supabase.auth.verifyOtp({
+            email,
+            token,
+            type: type as any,
+        });
+
+        if (!error) return; // Success
+        lastError = error;
+    }
+
+    throw new Error(lastError?.message || "Invalid or expired OTP");
+};
+
+export const resetUserPassword = async (email: string, newPassword: string): Promise<void> => {
+    const { error } = await supabase
+        .from('users')
+        .update({ password: newPassword })
+        .eq('email', email);
+
+    if (error) {
+        throw new Error(error.message);
+    }
 };
 
 // --- Book Services with Supabase ---

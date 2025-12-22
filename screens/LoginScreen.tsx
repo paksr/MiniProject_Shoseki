@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, Image,
-    ScrollView, StyleSheet, Dimensions
+    ScrollView, StyleSheet, Dimensions, Alert
 } from 'react-native';
-import { Shield, User as UserIcon, BookOpen } from 'lucide-react-native';
+import { Shield, User as UserIcon, BookOpen, Eye, EyeOff } from 'lucide-react-native';
 import { User } from '../types';
-import { createUser, loginUser, loginAdmin, getUsers } from '../services/supabaseStorage';
+import { createUser, loginUser, loginAdmin, getRecentUsers, saveRecentUser, removeRecentUser, requestPasswordResetOTP, verifyPasswordResetOTP, resetUserPassword } from '../services/supabaseStorage';
 import Button from '../components/Button';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -15,20 +15,25 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
-    const [mode, setMode] = useState<'login' | 'register' | 'admin'>('login');
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
     const [password, setPassword] = useState('');
     const [adminId, setAdminId] = useState('');
     const [error, setError] = useState('');
     const [savedUsers, setSavedUsers] = useState<User[]>([]);
+    const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [otp, setOtp] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [resetStep, setResetStep] = useState<'email' | 'otp' | 'password'>('email');
+    const [mode, setMode] = useState<'login' | 'register' | 'admin' | 'forgot'>('login');
 
     React.useEffect(() => {
         loadUsers();
     }, []);
 
     const loadUsers = async () => {
-        const users = await getUsers();
+        const users = await getRecentUsers();
         setSavedUsers(users);
     };
 
@@ -43,9 +48,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 onLogin(user);
             } else if (mode === 'login') {
                 const user = await loginUser(email, password);
+                await saveRecentUser(user);
                 onLogin(user);
             } else {
+                // REGISTRATION: Must be @gmail.com
+                if (!email.toLowerCase().endsWith('@gmail.com')) {
+                    setError('Only real Gmail addresses (@gmail.com) are allowed for registration');
+                    return;
+                }
                 const user = await createUser(name, email, password);
+                await saveRecentUser(user);
                 onLogin(user);
             }
         } catch (e: any) {
@@ -56,19 +68,101 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     const handleQuickLogin = async (userEmail: string) => {
         try {
             const user = await loginUser(userEmail);
+            await saveRecentUser(user);
             onLogin(user);
         } catch (e: any) {
             setError(e.message);
         }
     };
 
-    const switchMode = (newMode: 'login' | 'register' | 'admin') => {
+    const handleRemoveQuickLogin = (user: User) => {
+        Alert.alert(
+            'Remove Profile',
+            `Remove ${user.name} from Quick Login? This will not delete the account.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await removeRecentUser(user.email);
+                        loadUsers();
+                    }
+                }
+            ]
+        );
+    };
+
+    const switchMode = (newMode: 'login' | 'register' | 'admin' | 'forgot') => {
         setMode(newMode);
         setError('');
         setEmail('');
         setName('');
         setPassword('');
         setAdminId('');
+        setOtp('');
+        setNewPassword('');
+        setResetStep('email');
+    };
+
+    const handleResetRequest = async () => {
+        if (!email) {
+            setError('Please enter your email');
+            return;
+        }
+        if (!email.toLowerCase().endsWith('@gmail.com')) {
+            setError('Only Gmail addresses (@gmail.com) are supported for password reset');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        try {
+            await requestPasswordResetOTP(email);
+            setResetStep('otp');
+            setError('OTP sent! Please check your Gmail (Inbox and Spam).');
+            setTimeout(() => setError(''), 5000);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVerifyOTP = async () => {
+        if (!otp) {
+            setError('Please enter the OTP');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        try {
+            await verifyPasswordResetOTP(email, otp);
+            setResetStep('password');
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePasswordReset = async () => {
+        if (!newPassword) {
+            setError('Please enter a new password');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        try {
+            await resetUserPassword(email, newPassword);
+            setError('Password reset successful! Please login.');
+            setTimeout(() => {
+                switchMode('login');
+            }, 2000);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -102,14 +196,112 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                                 value={adminId}
                                 onChangeText={setAdminId}
                             />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Password"
-                                placeholderTextColor="#a8a29e"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
+                            <View style={styles.passwordContainer}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder="Password"
+                                    placeholderTextColor="#a8a29e"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeIcon}
+                                    onPress={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff size={20} color="#a8a29e" />
+                                    ) : (
+                                        <Eye size={20} color="#a8a29e" />
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    ) : mode === 'forgot' ? (
+                        <>
+                            {resetStep === 'email' && (
+                                <>
+                                    <View style={styles.resetHeader}>
+                                        <Text style={styles.resetTitle}>Reset Password</Text>
+                                        <Text style={styles.resetSubtitle}>Enter your email to receive a code</Text>
+                                    </View>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Student Email"
+                                        placeholderTextColor="#a8a29e"
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.primaryButton, loading && { opacity: 0.7 }]}
+                                        onPress={handleResetRequest}
+                                        disabled={loading}
+                                    >
+                                        <Text style={styles.primaryButtonText}>{loading ? 'Sending...' : 'Send OTP'}</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                            {resetStep === 'otp' && (
+                                <>
+                                    <View style={styles.resetHeader}>
+                                        <Text style={styles.resetTitle}>Verify OTP</Text>
+                                        <Text style={styles.resetSubtitle}>Enter the 6-digit code sent to {email}</Text>
+                                    </View>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter 6-digit code"
+                                        placeholderTextColor="#a8a29e"
+                                        value={otp}
+                                        onChangeText={setOtp}
+                                        keyboardType="number-pad"
+                                        maxLength={6}
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.primaryButton, loading && { opacity: 0.7 }]}
+                                        onPress={handleVerifyOTP}
+                                        disabled={loading}
+                                    >
+                                        <Text style={styles.primaryButtonText}>{loading ? 'Verifying...' : 'Verify Code'}</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
+                            {resetStep === 'password' && (
+                                <>
+                                    <View style={styles.resetHeader}>
+                                        <Text style={styles.resetTitle}>New Password</Text>
+                                        <Text style={styles.resetSubtitle}>Set your new sanctuary password</Text>
+                                    </View>
+                                    <View style={styles.passwordContainer}>
+                                        <TextInput
+                                            style={styles.passwordInput}
+                                            placeholder="New Password"
+                                            placeholderTextColor="#a8a29e"
+                                            value={newPassword}
+                                            onChangeText={setNewPassword}
+                                            secureTextEntry={!showPassword}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.eyeIcon}
+                                            onPress={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? (
+                                                <EyeOff size={20} color="#a8a29e" />
+                                            ) : (
+                                                <Eye size={20} color="#a8a29e" />
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={[styles.primaryButton, loading && { opacity: 0.7 }]}
+                                        onPress={handlePasswordReset}
+                                        disabled={loading}
+                                    >
+                                        <Text style={styles.primaryButtonText}>{loading ? 'Updating...' : 'Reset Password'}</Text>
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </>
                     ) : (
                         <>
@@ -131,14 +323,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Password"
-                                placeholderTextColor="#a8a29e"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                            />
+                            <View style={styles.passwordContainer}>
+                                <TextInput
+                                    style={styles.passwordInput}
+                                    placeholder="Password"
+                                    placeholderTextColor="#a8a29e"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry={!showPassword}
+                                />
+                                <TouchableOpacity
+                                    style={styles.eyeIcon}
+                                    onPress={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff size={20} color="#a8a29e" />
+                                    ) : (
+                                        <Eye size={20} color="#a8a29e" />
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </>
                     )}
 
@@ -170,6 +374,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                         </TouchableOpacity>
                     )}
 
+                    {isStudent && mode === 'login' && (
+                        <TouchableOpacity
+                            style={styles.ghostButton}
+                            onPress={() => switchMode('forgot')}
+                        >
+                            <Text style={[styles.ghostButtonText, { textDecorationLine: 'underline' }]}>Forgot Password?</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {mode === 'forgot' && (
+                        <TouchableOpacity
+                            style={styles.ghostButton}
+                            onPress={() => switchMode('login')}
+                        >
+                            <Text style={styles.ghostButtonText}>Back to Login</Text>
+                        </TouchableOpacity>
+                    )}
+
                     {isAdmin && (
                         <TouchableOpacity
                             style={styles.ghostButton}
@@ -190,6 +412,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                                     key={u.id}
                                     style={styles.quickLoginItem}
                                     onPress={() => handleQuickLogin(u.email)}
+                                    onLongPress={() => handleRemoveQuickLogin(u)}
+                                    delayLongPress={500}
                                 >
                                     <View style={styles.avatar}>
                                         <Text style={styles.avatarText}>{u.name.substring(0, 2).toUpperCase()}</Text>
@@ -205,24 +429,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             </ScrollView>
 
             {/* Portal Switch - Fixed at Bottom */}
-            <View style={styles.portalSwitchContainer}>
-                <View style={styles.portalSwitch}>
-                    <TouchableOpacity
-                        style={[styles.portalButton, isStudent && styles.portalButtonActive]}
-                        onPress={() => switchMode('login')}
-                    >
-                        <UserIcon size={12} color={isStudent ? '#5D4037' : '#a8a29e'} />
-                        <Text style={[styles.portalText, isStudent && styles.portalTextActive]}>Student</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.portalButton, isAdmin && styles.portalButtonActive]}
-                        onPress={() => switchMode('admin')}
-                    >
-                        <Shield size={12} color={isAdmin ? '#5D4037' : '#a8a29e'} />
-                        <Text style={[styles.portalText, isAdmin && styles.portalTextActive]}>Admin</Text>
-                    </TouchableOpacity>
+            {mode !== 'forgot' && (
+                <View style={styles.portalSwitchContainer}>
+                    <View style={styles.portalSwitch}>
+                        <TouchableOpacity
+                            style={[styles.portalButton, isStudent && styles.portalButtonActive]}
+                            onPress={() => switchMode('login')}
+                        >
+                            <UserIcon size={12} color={isStudent ? '#5D4037' : '#a8a29e'} />
+                            <Text style={[styles.portalText, isStudent && styles.portalTextActive]}>Student</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.portalButton, isAdmin && styles.portalButtonActive]}
+                            onPress={() => switchMode('admin')}
+                        >
+                            <Shield size={12} color={isAdmin ? '#5D4037' : '#a8a29e'} />
+                            <Text style={[styles.portalText, isAdmin && styles.portalTextActive]}>Admin</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
+            )}
         </View>
     );
 };
@@ -282,6 +508,39 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         fontSize: 16,
         color: '#1c1917'
+    },
+    passwordContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#e7e5e4',
+        borderRadius: 12,
+        paddingRight: 12,
+    },
+    passwordInput: {
+        flex: 1,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        fontSize: 16,
+        color: '#1c1917'
+    },
+    eyeIcon: {
+        padding: 8,
+    },
+    resetHeader: {
+        marginBottom: 16,
+        marginTop: 8,
+    },
+    resetTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#3E2723',
+    },
+    resetSubtitle: {
+        fontSize: 14,
+        color: '#78716c',
+        marginTop: 4,
     },
     error: {
         backgroundColor: '#fee2e2',
